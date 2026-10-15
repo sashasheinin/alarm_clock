@@ -22,6 +22,8 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   beep pattern ramping 15% -> 100% over 60 s, auto-stop after 15 min. BOOT or serial `stop`
   dismisses for now. Not yet tested on the board: the late-fire path and the 15 min timeout.
   Next: step 6 (math dismiss, IMU snooze).
+- **Alarm is currently OFF on the board** (all days off in NVS, 2026-10-15) until step 6 works.
+  Restore with serial `alarm 0 06:45` ... `alarm 5 06:45`; Saturday (6) stays off.
 - Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards
   (`time $(TZ=Asia/Jerusalem date +%H:%M:%S)`), or wait for the hourly NTP sync.
 - Offline test build: `PLATFORMIO_BUILD_FLAGS=-DCLOCK_NO_WIFI platformio run -e clock -t upload`.

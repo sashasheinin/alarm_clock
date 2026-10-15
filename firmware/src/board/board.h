@@ -50,6 +50,7 @@
 // ---- display.cpp ----
 void display_init(void);                       // bus + panel, cleared, default brightness
 void display_set_brightness(uint8_t level);    // 0..255, 0 = panel dark
+void display_power(bool on);                   // panel sleep in/out (~240 ms, blocks)
 void display_draw_bitmap(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* pixels);
 void display_round_area(int32_t* x1, int32_t* y1, int32_t* x2, int32_t* y2);  // CO5300 needs even-aligned areas
 

@@ -13,7 +13,12 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
 - Step 3 done (2026-10-15): time loads from the RTC at boot, Wi-Fi + SNTP corrects it and
   writes the RTC. Offline path verified: forced power-off, no Wi-Fi, time correct on restart.
   Wi-Fi details in `firmware/src/secrets.h` (git-ignored; copy `secrets.example.h`).
-  `--:--` for unknown time is not yet seen on the board. Next: step 4 (burn-in protection).
+  `--:--` for unknown time is not yet seen on the board.
+- Step 4 done (2026-10-15, `screen.cpp`): panel off 22:00-06:00, tap/PWR wakes it dim for 15 s
+  (the waking tap is swallowed), pixel shift up to 4 px every 2 min, face deleted while dark.
+  Never dark while time is unknown. Next: step 5 (alarm core).
+- Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards
+  (`time $(TZ=Asia/Jerusalem date +%H:%M:%S)`), or wait for the hourly NTP sync.
 - Offline test build: `PLATFORMIO_BUILD_FLAGS=-DCLOCK_NO_WIFI platformio run -e clock -t upload`.
 - `mc_clock_project/` holds only the browser preview and the old handoff `DESIGN.md`; the root
   `DESIGN.md` replaces it.
@@ -40,7 +45,7 @@ missing `scons.py`, `idf_tools.py` or `xtensa-esp32s3-elf-g++`, the toolchain ca
 PlatformIO download them again.
 
 Board code is in `firmware/src/board/` (`board.h` = pins + API). In `main.cpp`: PWR short press =
-next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`,
+next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`, `wake`,
 `beep`, `vol N`, `bright N`. The step-1 hardware test screen is in commit 01ad675.
 
 ## Rules

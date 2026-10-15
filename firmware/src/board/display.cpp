@@ -20,6 +20,13 @@ void display_set_brightness(uint8_t level) {
     if (gfx) gfx->setBrightness(level);
 }
 
+// Panel sleep: display off + sleep-in. Pixels are fully dark, unlike brightness 0.
+void display_power(bool on) {
+    if (!gfx) return;
+    if (on) gfx->displayOn();
+    else    gfx->displayOff();
+}
+
 void display_draw_bitmap(int32_t x, int32_t y, int32_t w, int32_t h, const uint16_t* pixels) {
     if (gfx) gfx->draw16bitRGBBitmap(x, y, (uint16_t*)pixels, w, h);
 }

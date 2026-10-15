@@ -9,9 +9,10 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 
 - Faces: 3 in LVGL 9 (`firmware/src/mc_clock.c` / `.h`), running on the board since 2026-10-15.
 - Browser preview of the same faces: `mc_clock_preview.html` (open locally, no server needed).
-- Steps 1-3 done 2026-10-15. Step 3: RTC + Wi-Fi/SNTP time verified, including a power cut
+- Steps 1-4 done 2026-10-15. Step 4: night 22:00-06:00 panel fully off, tap/PWR wakes it dim
+  for 15 s, pixel shift. Step 3: RTC + Wi-Fi/SNTP time verified, including a power cut
   with Wi-Fi off. Step 1: display, touch, buttons, PMU and speaker confirmed on the board.
-- Not started: alarm, settings page, burn-in protection.
+- Not started: alarm (incl. bedtime face), settings page, burn-in protection.
 - Stack changed 2026-10-15 from ESP-IDF + Waveshare demo to PlatformIO + Arduino, reusing
   Clawdmeter's board code (see "Reference project").
 
@@ -122,8 +123,9 @@ Open, seen on the board:
   is empty.
 - Near sunrise/sunset (around 06:00-06:30, 17:30-18:00) the sun drops behind the digits and
   white digits on the yellow sun are hard to read.
-- Cloud animation redraws at full frame rate forever; fine on USB, wasteful on battery. The
-  night/bedtime face should not animate.
+- Cloud animation redraws at full frame rate while the screen is on (stopped while dark).
+- The user saw the night wake last ~8 s; serial timing measured 15.0 s from panel on to off.
+  Not resolved.
 
 ### IP rule
 

@@ -320,6 +320,8 @@ static const face_t FACES[] = {
 static lv_obj_t *s_screen, *s_root;
 static lv_timer_t *s_shuffle;
 static int s_idx = -1;
+static int s_dx, s_dy;          /* pixel-shift offset */
+static bool s_asleep;
 
 static void tick_cb(lv_timer_t *timer)
 {
@@ -334,13 +336,14 @@ static void tick_cb(lv_timer_t *timer)
 
 /* Registered on the screen, not the face root: the root is deleted on switch,
  * and an object must not be deleted from inside its own event handler. */
-static void tap_cb(lv_event_t *e) { (void)e; mc_clock_next(); }
+static void tap_cb(lv_event_t *e) { (void)e; if (!s_asleep) mc_clock_next(); }
 
 static void show(int idx)
 {
     if (s_root) lv_obj_delete(s_root);
     s_idx = idx;
     s_root = FACES[idx].create(s_screen);   /* NULL if out of memory: blank until next switch */
+    if (s_root) lv_obj_set_pos(s_root, s_dx, s_dy);
     tick_cb(NULL);
 }
 
@@ -361,12 +364,39 @@ void mc_clock_show(int idx)
 
 int mc_clock_face_count(void) { return FACE_COUNT; }
 
+void mc_clock_set_offset(int dx, int dy)
+{
+    s_dx = dx;
+    s_dy = dy;
+    if (s_root) lv_obj_set_pos(s_root, dx, dy);
+}
+
+void mc_clock_sleep(void)
+{
+    if (s_asleep) return;
+    s_asleep = true;
+    if (s_root) lv_obj_delete(s_root);
+    s_root = NULL;
+    lv_timer_pause(s_shuffle);
+}
+
+void mc_clock_wake(void)
+{
+    if (!s_asleep) return;
+    s_asleep = false;
+    lv_timer_resume(s_shuffle);
+    mc_clock_next();
+}
+
 static void shuffle_cb(lv_timer_t *timer) { (void)timer; mc_clock_next(); }
 
 void mc_clock_init(lv_obj_t *screen)
 {
     s_screen = screen;
     lv_obj_remove_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
+    /* black behind the face: the pixel shift exposes a few px at the edges */
+    lv_obj_set_style_bg_color(s_screen, lv_color_hex(0x000000), 0);
+    lv_obj_set_style_bg_opa(s_screen, LV_OPA_COVER, 0);
     lv_obj_add_event_cb(s_screen, tap_cb, LV_EVENT_CLICKED, NULL);
     lv_timer_create(tick_cb, MC_TICK_MS, NULL);
     s_shuffle = lv_timer_create(shuffle_cb, MC_SHUFFLE_MS, NULL);

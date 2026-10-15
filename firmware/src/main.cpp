@@ -1,8 +1,8 @@
 // Clock firmware: faces (mc_clock.c) + timekeeping (RTC, Wi-Fi + SNTP).
 //
-// Buttons:   PWR short press = next brightness step.
+// Buttons:   PWR short press = next day brightness step; at night it wakes the screen.
 // Serial:    "screenshot" (used by tools/screenshot.sh), "time HH:MM[:SS]",
-//            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "status", "beep",
+//            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "status", "wake", "beep",
 //            "vol <0-100>", "bright <0-255>".
 #include <Arduino.h>
 #include <Wire.h>
@@ -12,6 +12,7 @@
 #include "board/board.h"
 #include "mc_clock.h"
 #include "timekeeping.h"
+#include "screen.h"
 
 #define BUF_LINES 40   // LVGL partial render strips: 480 x 40 RGB565, two buffers in PSRAM
 
@@ -36,9 +37,18 @@ static void rounder_cb(lv_event_t* e) {
 
 static void touch_cb(lv_indev_t* indev, lv_indev_data_t* data) {
     (void)indev;
+    static bool swallow = false;   // the touch that woke a dark screen must not also switch faces
     uint16_t x, y;
     bool pressed;
     touch_read(&x, &y, &pressed);
+    if (pressed && screen_is_dark()) {
+        screen_wake();
+        swallow = true;
+    }
+    if (swallow) {
+        if (!pressed) swallow = false;
+        pressed = false;
+    }
     data->point.x = x;
     data->point.y = y;
     data->state = pressed ? LV_INDEV_STATE_PRESSED : LV_INDEV_STATE_RELEASED;
@@ -126,8 +136,11 @@ static void handle_command(const char* cmd) {
         print_heap();
     } else if (strcmp(cmd, "status") == 0) {
         timekeeping_print_status();
+        screen_print_status();
         Serial.printf("power: battery %d%%%s, usb %s\n", power_battery_pct(),
                       power_is_charging() ? " charging" : "", power_is_vbus_in() ? "yes" : "no");
+    } else if (strcmp(cmd, "wake") == 0) {
+        screen_wake();
     } else if (strcmp(cmd, "heap") == 0) {
         print_heap();
     } else if (strcmp(cmd, "i2cscan") == 0) {
@@ -183,7 +196,7 @@ void setup() {
 
     lvgl_init();
     mc_clock_init(lv_screen_active());
-    display_set_brightness(BRIGHTNESS[bright_idx]);
+    screen_init(BRIGHTNESS[bright_idx]);
     print_heap();
     Serial.println("ready");
 }
@@ -192,12 +205,18 @@ void loop() {
     lv_timer_handler();
     power_tick();
     timekeeping_tick();
+    screen_tick();
     check_serial();
 
     if (power_pwr_pressed()) {
-        bright_idx = (bright_idx + 1) % (int)sizeof(BRIGHTNESS);
-        display_set_brightness(BRIGHTNESS[bright_idx]);
-        Serial.printf("PWR pressed, brightness %u\n", BRIGHTNESS[bright_idx]);
+        if (screen_is_dark()) {
+            screen_wake();
+            Serial.println("PWR pressed, screen woken");
+        } else {
+            bright_idx = (bright_idx + 1) % (int)sizeof(BRIGHTNESS);
+            screen_set_day_brightness(BRIGHTNESS[bright_idx]);
+            Serial.printf("PWR pressed, day brightness %u\n", BRIGHTNESS[bright_idx]);
+        }
     }
 
     delay(5);

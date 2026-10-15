@@ -126,6 +126,8 @@ static void handle_command(const char* cmd) {
         print_heap();
     } else if (strcmp(cmd, "status") == 0) {
         timekeeping_print_status();
+        Serial.printf("power: battery %d%%%s, usb %s\n", power_battery_pct(),
+                      power_is_charging() ? " charging" : "", power_is_vbus_in() ? "yes" : "no");
     } else if (strcmp(cmd, "heap") == 0) {
         print_heap();
     } else if (strcmp(cmd, "i2cscan") == 0) {

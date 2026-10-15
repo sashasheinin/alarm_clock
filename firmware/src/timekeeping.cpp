@@ -5,7 +5,8 @@
 #include <sys/time.h>
 #include "board/board.h"
 
-#if __has_include("secrets.h")
+// Build with -DCLOCK_NO_WIFI to test the offline (RTC-only) path.
+#if __has_include("secrets.h") && !defined(CLOCK_NO_WIFI)
 #include "secrets.h"              // WIFI_SSID, WIFI_PASS (git-ignored, see secrets.example.h)
 #endif
 

@@ -88,7 +88,7 @@ void timekeeping_init(void) {
     configTzTime(TZ_ISRAEL, "pool.ntp.org", "time.google.com");   // re-syncs hourly
     Serial.printf("time: Wi-Fi connecting to \"%s\"\n", WIFI_SSID);
 #else
-    Serial.println("time: no secrets.h, Wi-Fi disabled");
+    Serial.println("time: Wi-Fi disabled (no secrets.h, or built with CLOCK_NO_WIFI)");
 #endif
 }
 

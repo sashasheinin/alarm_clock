@@ -10,9 +10,11 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
 
 - Steps 1-2 done (2026-10-15): the 3 faces (`firmware/src/mc_clock.c`) run on the board with
   the review fixes applied. Open face issues are in DESIGN.md "mc_clock.c review".
-- Step 3 in progress: RTC load/save works on the board (`timekeeping.cpp`, `board/rtc.cpp`).
-  Wi-Fi + SNTP is written but untested until `firmware/src/secrets.h` exists (copy
-  `secrets.example.h`; git-ignored). Faces show `--:--` while time is unknown (untested).
+- Step 3 done (2026-10-15): time loads from the RTC at boot, Wi-Fi + SNTP corrects it and
+  writes the RTC. Offline path verified: forced power-off, no Wi-Fi, time correct on restart.
+  Wi-Fi details in `firmware/src/secrets.h` (git-ignored; copy `secrets.example.h`).
+  `--:--` for unknown time is not yet seen on the board. Next: step 4 (burn-in protection).
+- Offline test build: `PLATFORMIO_BUILD_FLAGS=-DCLOCK_NO_WIFI platformio run -e clock -t upload`.
 - `mc_clock_project/` holds only the browser preview and the old handoff `DESIGN.md`; the root
   `DESIGN.md` replaces it.
 

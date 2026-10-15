@@ -9,8 +9,9 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 
 - Faces: 3 in LVGL 9 (`firmware/src/mc_clock.c` / `.h`), running on the board since 2026-10-15.
 - Browser preview of the same faces: `mc_clock_preview.html` (open locally, no server needed).
-- Steps 1-2 done 2026-10-15. Step 1: display, touch, buttons, PMU and speaker confirmed on the board.
-- Not started: time sync, alarm, settings page, burn-in protection.
+- Steps 1-3 done 2026-10-15. Step 3: RTC + Wi-Fi/SNTP time verified, including a power cut
+  with Wi-Fi off. Step 1: display, touch, buttons, PMU and speaker confirmed on the board.
+- Not started: alarm, settings page, burn-in protection.
 - Stack changed 2026-10-15 from ESP-IDF + Waveshare demo to PlatformIO + Arduino, reusing
   Clawdmeter's board code (see "Reference project").
 

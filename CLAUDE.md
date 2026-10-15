@@ -8,12 +8,11 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
 
 ## Current state
 
-- Faces (`mc_clock_project/mc_clock/mc_clock.c`) are written but never compiled. The 7 review
-  fixes in DESIGN.md "Known issues in mc_clock.c" are not applied yet.
-- Step 1 done (2026-10-15): test firmware in `firmware/` runs on the board; display, touch,
-  buttons, PMU and speaker confirmed, beep is loud enough. Next: step 2 (faces into `firmware/`).
-- `mc_clock_project/DESIGN.md` and `mc_clock_project.zip` are the old handoff; the root
-  `DESIGN.md` replaces them.
+- Steps 1-2 done (2026-10-15): the 3 faces (`firmware/src/mc_clock.c`) run on the board with
+  the review fixes applied. Open face issues are in DESIGN.md "mc_clock.c review".
+- No time sync yet: the clock shows 1970 until set over serial (`time HH:MM`). Next: step 3.
+- `mc_clock_project/` holds only the browser preview and the old handoff `DESIGN.md`; the root
+  `DESIGN.md` replaces it.
 
 ## Stack
 
@@ -36,9 +35,9 @@ missing `scons.py`, `idf_tools.py` or `xtensa-esp32s3-elf-g++`, the toolchain ca
 `~/.platformio/packages` and `~/.platformio/tools` is damaged; deleting the affected folders makes
 PlatformIO download them again.
 
-Board code is in `firmware/src/board/` (`board.h` = pins + API). The step-1 test screen in
-`main.cpp`: BOOT = beep, GPIO18 = next volume, PWR = next brightness; serial commands
-`screenshot`, `beep`, `vol N`, `bright N`.
+Board code is in `firmware/src/board/` (`board.h` = pins + API). In `main.cpp`: PWR short press =
+next brightness; serial commands `screenshot`, `time HH:MM[:SS]`, `face N`, `next`, `heap`,
+`beep`, `vol N`, `bright N`. The step-1 hardware test screen is in commit 01ad675.
 
 ## Rules
 

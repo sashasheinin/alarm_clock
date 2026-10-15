@@ -1,5 +1,5 @@
 /*
- * Minecraft-style clock faces for a 480x480 LVGL 9 display (ESP-IDF).
+ * Minecraft-style clock faces for a 480x480 LVGL 9 display.
  * Everything is drawn from plain squares: no image assets, original art.
  *
  *  1. Sky      - blocky sun/moon follows the real time of day, drifting clouds, grass+dirt ground
@@ -25,7 +25,7 @@ static lv_obj_t *px(lv_obj_t *parent, int x, int y, int w, int h, uint32_t color
     lv_obj_set_size(o, w, h);
     lv_obj_set_style_bg_color(o, lv_color_hex(color), 0);
     lv_obj_set_style_bg_opa(o, opa, 0);
-    lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);   /* taps fall through to the face root */
+    lv_obj_remove_flag(o, LV_OBJ_FLAG_CLICKABLE);   /* taps fall through to the screen */
     lv_obj_remove_flag(o, LV_OBJ_FLAG_SCROLLABLE);
     return o;
 }
@@ -35,7 +35,6 @@ static void free_cb(lv_event_t *e) { lv_free(lv_event_get_user_data(e)); }
 static lv_obj_t *make_root(lv_obj_t *parent, uint32_t bg, void *data)
 {
     lv_obj_t *r = px(parent, 0, 0, 480, 480, bg, LV_OPA_COVER);
-    lv_obj_add_flag(r, LV_OBJ_FLAG_CLICKABLE);
     lv_obj_set_user_data(r, data);
     lv_obj_add_event_cb(r, free_cb, LV_EVENT_DELETE, data);
     return r;
@@ -147,6 +146,7 @@ static lv_obj_t *make_cloud(lv_obj_t *parent, int y, int ms, int delay)
 static lv_obj_t *sky_create(lv_obj_t *parent)
 {
     sky_t *s = lv_zalloc(sizeof(*s));
+    if (!s) return NULL;
     lv_obj_t *root = make_root(parent, 0x78B4FF, s);
     s->phase = -1;
     s->last_min = -1;
@@ -192,7 +192,6 @@ static void sky_update(lv_obj_t *root, const struct tm *t, uint32_t tick)
                 if (phase == 0) lv_obj_remove_flag(s->stars[i], LV_OBJ_FLAG_HIDDEN);
                 else            lv_obj_add_flag(s->stars[i], LV_OBJ_FLAG_HIDDEN);
             }
-            lv_obj_set_style_bg_color(s->sun, lv_color_hex(sun_up ? 0xFFE14D : 0xE8ECF4), 0);
         }
         /* progress 0..1 along the arc: sun 06:00-18:00, moon 18:00-06:00 */
         int since = sun_up ? (mins - 360) : ((mins + 1440 - 1080) % 1440);
@@ -218,6 +217,7 @@ typedef struct {
 static lv_obj_t *lamp_create(lv_obj_t *parent)
 {
     lamp_t *l = lv_zalloc(sizeof(*l));
+    if (!l) return NULL;
     lv_obj_t *root = make_root(parent, 0x15100C, l);
     l->pulse = -1;
 
@@ -233,7 +233,7 @@ static void lamp_update(lv_obj_t *root, const struct tm *t, uint32_t tick)
     lamp_t *l = lv_obj_get_user_data(root);
     pc_set(&l->pc, t->tm_hour, t->tm_min, (t->tm_sec & 1) == 0);
 
-    int pulse = (tick / 150) % 24;           /* signal travels left to right, then pauses */
+    int pulse = (tick / MC_TICK_MS) % 24;    /* one cell per update, then a 4-step pause */
     if (pulse != l->pulse) {
         l->pulse = pulse;
         for (int i = 0; i < 20; i++) {
@@ -250,7 +250,7 @@ static void lamp_update(lv_obj_t *root, const struct tm *t, uint32_t tick)
 typedef struct {
     pixel_clock_t pc;
     lv_obj_t *face[8][8];
-    bool blink;
+    int8_t blink;    /* -1 = eyes not drawn yet */
 } buddy_t;
 
 static const uint32_t GREENS[3] = {0x4CAF3E, 0x43A036, 0x5BBF4A};
@@ -260,6 +260,7 @@ static uint32_t buddy_base(int r, int c) { return GREENS[(r * 7 + c * 13 + r * c
 static lv_obj_t *buddy_create(lv_obj_t *parent)
 {
     buddy_t *b = lv_zalloc(sizeof(*b));
+    if (!b) return NULL;
     lv_obj_t *root = make_root(parent, 0x1B3A19, b);
 
     for (int r = 0; r < 8; r++)
@@ -273,7 +274,7 @@ static lv_obj_t *buddy_create(lv_obj_t *parent)
     static const uint8_t SMILE[6][2] = {{5,1},{5,6},{6,2},{6,3},{6,4},{6,5}};
     for (int i = 0; i < 6; i++)
         set_cell(b->face[SMILE[i][0]][SMILE[i][1]], lv_color_hex(0x10230F), LV_OPA_COVER);
-    /* eyes drawn in update() */
+    b->blink = -1;   /* eyes drawn by the first update(), which show() calls right away */
 
     pc_init(&b->pc, root, PC_X(17, 15), 270, 17, 15, 0xE9FFE5, 0x24491F, LV_OPA_COVER);
     return root;
@@ -282,8 +283,8 @@ static lv_obj_t *buddy_create(lv_obj_t *parent)
 static void buddy_update(lv_obj_t *root, const struct tm *t, uint32_t tick)
 {
     buddy_t *b = lv_obj_get_user_data(root);
-    bool blink = ((tick / MC_TICK_MS) % 20) == 0;          /* quick blink about every 4 s */
-    if (blink != b->blink || tick < MC_TICK_MS * 2) {
+    int8_t blink = ((tick / MC_TICK_MS) % 20) == 0;        /* quick blink about every 4 s */
+    if (blink != b->blink) {
         b->blink = blink;
         lv_color_t eye = blink ? lv_color_hex(buddy_base(3, 2)) : lv_color_hex(0x10230F);
         lv_color_t eye2 = blink ? lv_color_hex(buddy_base(3, 5)) : lv_color_hex(0x10230F);
@@ -309,6 +310,7 @@ static const face_t FACES[] = {
 #define FACE_COUNT ((int)(sizeof(FACES) / sizeof(FACES[0])))
 
 static lv_obj_t *s_screen, *s_root;
+static lv_timer_t *s_shuffle;
 static int s_idx = -1;
 
 static void tick_cb(lv_timer_t *timer)
@@ -321,14 +323,15 @@ static void tick_cb(lv_timer_t *timer)
     FACES[s_idx].update(s_root, &tm, lv_tick_get());
 }
 
+/* Registered on the screen, not the face root: the root is deleted on switch,
+ * and an object must not be deleted from inside its own event handler. */
 static void tap_cb(lv_event_t *e) { (void)e; mc_clock_next(); }
 
 static void show(int idx)
 {
     if (s_root) lv_obj_delete(s_root);
     s_idx = idx;
-    s_root = FACES[idx].create(s_screen);
-    lv_obj_add_event_cb(s_root, tap_cb, LV_EVENT_CLICKED, NULL);
+    s_root = FACES[idx].create(s_screen);   /* NULL if out of memory: blank until next switch */
     tick_cb(NULL);
 }
 
@@ -337,14 +340,26 @@ void mc_clock_next(void)
     int n;
     do { n = esp_random() % FACE_COUNT; } while (n == s_idx && FACE_COUNT > 1);
     show(n);
+    if (s_shuffle) lv_timer_reset(s_shuffle);   /* a hand-picked face gets the full interval */
 }
+
+void mc_clock_show(int idx)
+{
+    if (idx < 0 || idx >= FACE_COUNT) return;
+    show(idx);
+    if (s_shuffle) lv_timer_reset(s_shuffle);
+}
+
+int mc_clock_face_count(void) { return FACE_COUNT; }
 
 static void shuffle_cb(lv_timer_t *timer) { (void)timer; mc_clock_next(); }
 
 void mc_clock_init(lv_obj_t *screen)
 {
     s_screen = screen;
+    lv_obj_remove_flag(s_screen, LV_OBJ_FLAG_SCROLLABLE);
+    lv_obj_add_event_cb(s_screen, tap_cb, LV_EVENT_CLICKED, NULL);
     lv_timer_create(tick_cb, MC_TICK_MS, NULL);
-    lv_timer_create(shuffle_cb, MC_SHUFFLE_MS, NULL);
+    s_shuffle = lv_timer_create(shuffle_cb, MC_SHUFFLE_MS, NULL);
     mc_clock_next();
 }

@@ -7,10 +7,9 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 
 ## Status
 
-- Faces: 3 written in LVGL 9 (`mc_clock.c` / `mc_clock.h`). **Not yet compiled or run on hardware.**
-  Reviewed 2026-10-15; fixes listed under "Known issues in mc_clock.c" are not applied yet.
+- Faces: 3 in LVGL 9 (`firmware/src/mc_clock.c` / `.h`), running on the board since 2026-10-15.
 - Browser preview of the same faces: `mc_clock_preview.html` (open locally, no server needed).
-- Step 1 done 2026-10-15: display, touch, buttons, PMU and speaker confirmed on the board.
+- Steps 1-2 done 2026-10-15. Step 1: display, touch, buttons, PMU and speaker confirmed on the board.
 - Not started: time sync, alarm, settings page, burn-in protection.
 - Stack changed 2026-10-15 from ESP-IDF + Waveshare demo to PlatformIO + Arduino, reusing
   Clawdmeter's board code (see "Reference project").
@@ -103,19 +102,19 @@ board code; do not write new drivers.
 2. **Lamp** — orange "lamp" digits on a dark wall, red signal pulse travelling along a wire at the bottom.
 3. **Buddy** — mottled green block face with cheeks and smile, blinks about every 4 s, time below.
 
-### Known issues in mc_clock.c (review 2026-10-15, not fixed yet)
+### mc_clock.c review (2026-10-15)
 
-1. Buddy's eyes are not drawn until the first blink when the face is created after boot
-   (the `tick < MC_TICK_MS * 2` check only holds right after boot). Draw eyes in `buddy_create()`.
-2. A tap deletes the root object inside the root's own click handler. Make the root
-   non-clickable and register `tap_cb` once on the screen in `mc_clock_init()`.
-3. No NULL check after `lv_zalloc` in the three `*_create()` functions.
-4. Lamp pulse steps every 150 ms but is polled every 200 ms, so it moves unevenly. Use
-   `tick / MC_TICK_MS`.
-5. A tap does not reset the shuffle timer; call `lv_timer_reset()` in `tap_cb`.
-6. `sky_update()` sets the sun color twice (line 195 is redundant).
-7. Cloud animation redraws at full frame rate forever; acceptable on USB, wasteful on battery.
-   The night/bedtime face should not animate.
+Fixed in step 2: Buddy eyes missing until first blink; face root deleted inside its own click
+handler (taps now go to the screen); no NULL check after `lv_zalloc`; uneven Lamp pulse; tap did
+not reset the shuffle timer; duplicate sun-colour call.
+
+Open, seen on the board:
+- Clouds start off-screen on the left, so for the first ~20 s after switching to Sky the sky
+  is empty.
+- Near sunrise/sunset (around 06:00-06:30, 17:30-18:00) the sun drops behind the digits and
+  white digits on the yellow sun are hard to read.
+- Cloud animation redraws at full frame rate forever; fine on USB, wasteful on battery. The
+  night/bedtime face should not animate.
 
 ### IP rule
 
@@ -196,6 +195,6 @@ Requirements:
 ## Files
 
 - `DESIGN.md` — this file (the copy inside the zip and `mc_clock_project/` is the older version)
-- `mc_clock_project/mc_clock/mc_clock.c`, `mc_clock.h` — the face manager and 3 faces
+- `firmware/` — PlatformIO project; `src/mc_clock.c/.h` = face manager and 3 faces, `src/board/` = drivers
 - `mc_clock_project/mc_clock_preview.html` — browser preview (tap = random face, slider = time of day)
 - `mc_clock_project.zip` — original handoff archive

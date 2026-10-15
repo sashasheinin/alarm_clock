@@ -81,7 +81,7 @@ board code; do not write new drivers.
    `LV_EVENT_INVALIDATE_AREA` (Clawdmeter's `display_hal_round_area`).
 6. LVGL partial render mode, two 480x40 RGB565 buffers allocated in PSRAM.
 7. Touch needs `setSwapXY(true)` and `setMirrorXY(true, false)`.
-8. `pio` is at `/opt/homebrew/bin/pio`; it may not be on PATH in non-interactive shells.
+8. Use `/opt/homebrew/bin/platformio`; the `pio` link there is broken.
 
 ## Face architecture
 

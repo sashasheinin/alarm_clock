@@ -10,7 +10,8 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
 
 - Faces (`mc_clock_project/mc_clock/mc_clock.c`) are written but never compiled. The 7 review
   fixes in DESIGN.md "Known issues in mc_clock.c" are not applied yet.
-- No PlatformIO project yet. Next step is build order step 1 (scaffold from Clawdmeter).
+- Step 1 (hardware test firmware in `firmware/`) builds; not yet run on the board. The faces
+  are not in `firmware/` yet (step 2).
 - `mc_clock_project/DESIGN.md` and `mc_clock_project.zip` are the old handoff; the root
   `DESIGN.md` replaces them.
 
@@ -21,7 +22,23 @@ Board code is reused from `~/Documents/Clawdmeter` (`firmware/src/boards/wavesha
 which is known to build and run on this board. Do not write new display/touch/PMU drivers.
 Copy its code, never its fonts or art (no license, Anthropic assets).
 
-`pio` is at `/opt/homebrew/bin/pio` and may not be on PATH in non-interactive shells.
+## Build / flash
+
+```bash
+/opt/homebrew/bin/platformio run -d firmware -e clock                      # build
+/opt/homebrew/bin/platformio run -d firmware -e clock -t upload            # flash (USB-C)
+/opt/homebrew/bin/platformio device monitor -d firmware                    # serial log
+tools/screenshot.sh out.png                                                # PNG of the screen
+```
+
+Use `platformio`, not `pio`: `/opt/homebrew/bin/pio` is a broken link. If the build fails with
+missing `scons.py`, `idf_tools.py` or `xtensa-esp32s3-elf-g++`, the toolchain cache under
+`~/.platformio/packages` and `~/.platformio/tools` is damaged; deleting the affected folders makes
+PlatformIO download them again.
+
+Board code is in `firmware/src/board/` (`board.h` = pins + API). The step-1 test screen in
+`main.cpp`: BOOT = beep, GPIO18 = next volume, PWR = next brightness; serial commands
+`screenshot`, `beep`, `vol N`, `bright N`.
 
 ## Rules
 

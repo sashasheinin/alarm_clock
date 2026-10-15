@@ -10,8 +10,8 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
 
 - Faces (`mc_clock_project/mc_clock/mc_clock.c`) are written but never compiled. The 7 review
   fixes in DESIGN.md "Known issues in mc_clock.c" are not applied yet.
-- Step 1 (hardware test firmware in `firmware/`) builds; not yet run on the board. The faces
-  are not in `firmware/` yet (step 2).
+- Step 1 done (2026-10-15): test firmware in `firmware/` runs on the board; display, touch,
+  buttons, PMU and speaker confirmed, beep is loud enough. Next: step 2 (faces into `firmware/`).
 - `mc_clock_project/DESIGN.md` and `mc_clock_project.zip` are the old handoff; the root
   `DESIGN.md` replaces them.
 

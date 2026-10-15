@@ -10,7 +10,8 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 - Faces: 3 written in LVGL 9 (`mc_clock.c` / `mc_clock.h`). **Not yet compiled or run on hardware.**
   Reviewed 2026-10-15; fixes listed under "Known issues in mc_clock.c" are not applied yet.
 - Browser preview of the same faces: `mc_clock_preview.html` (open locally, no server needed).
-- Not started: project scaffolding, time sync, alarm, settings page, burn-in protection.
+- Step 1 done 2026-10-15: display, touch, buttons, PMU and speaker confirmed on the board.
+- Not started: time sync, alarm, settings page, burn-in protection.
 - Stack changed 2026-10-15 from ESP-IDF + Waveshare demo to PlatformIO + Arduino, reusing
   Clawdmeter's board code (see "Reference project").
 
@@ -163,10 +164,8 @@ Requirements:
    face shuffling (done), slow pixel shift of the whole face, low brightness cap at night,
    screen-off window with tap/alarm to wake. Clawdmeter's `idle.cpp` fade/wake logic is a
    starting point; `gfx->setBrightness(0)` turns the panel dark.
-3. **Speaker loudness.** The onboard speaker is small. Test before writing alarm logic. Quick test
-   with no new code: flash Clawdmeter, set the chime volume in
-   `boards/waveshare_amoled_216/sound.cpp` from 65 to 100, send `buzz` over serial. If too quiet,
-   add an external amp + speaker.
+3. **Speaker loudness.** Resolved 2026-10-15: a 880 Hz sine at codec volume 100 on the onboard
+   speaker is loud enough. No external amp needed. Recheck with the real alarm WAV files.
 4. **Alarm reliability beats cool factor.** One missed alarm = the clock gets unplugged. Test the
    offline path (Wi-Fi off, power cycle) before anything else about the alarm.
 5. **Sky face contrast.** White digits on the daytime blue may look washed out on real hardware.

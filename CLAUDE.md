@@ -16,7 +16,12 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   `--:--` for unknown time is not yet seen on the board.
 - Step 4 done (2026-10-15, `screen.cpp`): panel off 22:00-06:00, tap/PWR wakes it dim for 15 s
   (the waking tap is swallowed), pixel shift up to 4 px every 2 min, face deleted while dark.
-  Never dark while time is unknown. Next: step 5 (alarm core).
+  Never dark while time is unknown.
+- Step 5 done (2026-10-15, `alarm.cpp`): per-weekday alarm in NVS (default 06:45 Sun-Fri, Sat
+  off), fires only on valid time, up to 30 min late, no double ring after reboot, generated
+  beep pattern ramping 15% -> 100% over 60 s, auto-stop after 15 min. BOOT or serial `stop`
+  dismisses for now. Not yet tested on the board: the late-fire path and the 15 min timeout.
+  Next: step 6 (math dismiss, IMU snooze).
 - Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards
   (`time $(TZ=Asia/Jerusalem date +%H:%M:%S)`), or wait for the hourly NTP sync.
 - Offline test build: `PLATFORMIO_BUILD_FLAGS=-DCLOCK_NO_WIFI platformio run -e clock -t upload`.
@@ -45,7 +50,7 @@ missing `scons.py`, `idf_tools.py` or `xtensa-esp32s3-elf-g++`, the toolchain ca
 PlatformIO download them again.
 
 Board code is in `firmware/src/board/` (`board.h` = pins + API). In `main.cpp`: PWR short press =
-next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`, `wake`,
+next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`, `wake`, `alarm`, `alarm <day> HH:MM|off`, `alarm test`, `stop`,
 `beep`, `vol N`, `bright N`. The step-1 hardware test screen is in commit 01ad675.
 
 ## Rules

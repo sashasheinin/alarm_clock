@@ -16,6 +16,7 @@ static volatile bool   playing = false;
 static uint8_t         volume  = 100;
 static uint16_t        tone_hz = 0;
 static uint16_t        tone_ms = 0;
+static volatile bool   alarm_stop_req = false;
 
 static void amp_enable(bool on) { digitalWrite(SND_PA_PIN, on ? HIGH : LOW); }
 
@@ -44,6 +45,62 @@ static void tone_task(void* arg) {
     playing = false;
     vTaskDelete(nullptr);
 }
+
+// Alarm: repeating "beep-beep ... pause" pattern until sound_alarm_stop().
+// Loudness ramps from ALARM_START_LEVEL to full over ALARM_RAMP_MS by scaling
+// the samples here, so nothing touches the I2C codec while it plays.
+#define ALARM_RAMP_MS      60000
+#define ALARM_START_LEVEL  0.15f
+#define ALARM_FREQ_HZ      1000
+
+// pattern in 10 ms chunks: on, off, on, off(long)
+static const uint8_t ALARM_PATTERN[] = {15, 8, 15, 40};
+
+static void alarm_task(void* arg) {
+    (void)arg;
+    static int16_t buf[TONE_CHUNK_FRAMES * 2];
+    const float step = 2.0f * (float)M_PI * ALARM_FREQ_HZ / SND_SAMPLE_RATE;
+    float phase = 0.0f;
+    uint32_t start = millis();
+
+    amp_enable(true);
+    delay(8);
+    while (!alarm_stop_req) {
+        for (int seg = 0; seg < (int)sizeof(ALARM_PATTERN) && !alarm_stop_req; seg++) {
+            bool on = (seg % 2) == 0;
+            for (int c = 0; c < ALARM_PATTERN[seg] && !alarm_stop_req; c++) {
+                float ramp = (float)(millis() - start) / ALARM_RAMP_MS;
+                float level = ALARM_START_LEVEL + (1.0f - ALARM_START_LEVEL) * (ramp > 1.0f ? 1.0f : ramp);
+                for (int i = 0; i < TONE_CHUNK_FRAMES; i++) {
+                    int16_t v = on ? (int16_t)(sinf(phase) * 30000.0f * level) : 0;
+                    buf[2 * i] = buf[2 * i + 1] = v;
+                    phase += step;
+                    if (phase > 2.0f * (float)M_PI) phase -= 2.0f * (float)M_PI;
+                }
+                i2s.write((uint8_t*)buf, sizeof(buf));
+            }
+        }
+    }
+    memset(buf, 0, sizeof(buf));
+    i2s.write((uint8_t*)buf, sizeof(buf));
+    delay(20);
+    amp_enable(false);
+    playing = false;
+    vTaskDelete(nullptr);
+}
+
+bool sound_alarm_start(void) {
+    if (!ready || playing) return false;
+    playing = true;
+    alarm_stop_req = false;
+    if (xTaskCreatePinnedToCore(alarm_task, "alarm", 4096, nullptr, 2, nullptr, 0) != pdPASS) {
+        playing = false;
+        return false;
+    }
+    return true;
+}
+
+void sound_alarm_stop(void) { alarm_stop_req = true; }
 
 bool sound_init(void) {
     pinMode(SND_PA_PIN, OUTPUT);

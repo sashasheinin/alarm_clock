@@ -9,10 +9,10 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 
 - Faces: 3 in LVGL 9 (`firmware/src/mc_clock.c` / `.h`), running on the board since 2026-10-15.
 - Browser preview of the same faces: `mc_clock_preview.html` (open locally, no server needed).
-- Steps 1-4 done 2026-10-15. Step 4: night 22:00-06:00 panel fully off, tap/PWR wakes it dim
+- Steps 1-5 done 2026-10-15. Step 5: alarm core with a generated tone (no TF card yet). Step 4: night 22:00-06:00 panel fully off, tap/PWR wakes it dim
   for 15 s, pixel shift. Step 3: RTC + Wi-Fi/SNTP time verified, including a power cut
   with Wi-Fi off. Step 1: display, touch, buttons, PMU and speaker confirmed on the board.
-- Not started: alarm (incl. bedtime face), settings page, burn-in protection.
+- Not started: math dismiss + IMU snooze, WAV sounds from TF card, bedtime face, settings page, burn-in protection.
 - Stack changed 2026-10-15 from ESP-IDF + Waveshare demo to PlatformIO + Arduino, reusing
   Clawdmeter's board code (see "Reference project").
 
@@ -148,7 +148,13 @@ Same rule for Clawdmeter: reuse its code, not its art or fonts.
 - ESP32 system time survives a software reset (e.g. after flashing) but not a power cut or EN
   reset, so "valid" right after a flash may come from the previous run, not the RTC.
 
-## Next up: alarm (not implemented)
+## Alarm
+
+Implemented (step 5): one time per weekday in NVS, default 06:45 Sunday-Friday, Saturday off
+(Israeli weekend is Friday-Saturday; Friday is a school day). Fires up to 30 min late if the
+board was off at the alarm minute; the handled date is saved so a reboot does not ring twice.
+Sound is a generated beep pattern ramping 15% -> 100% over 60 s (scaled in the sound task, no
+I2C while playing), auto-stop after 15 min. Temporary dismiss: BOOT or serial `stop`.
 
 Requirements:
 - Fires from the system clock, never from the network. Must work fully offline.

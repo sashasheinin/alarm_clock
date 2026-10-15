@@ -1,8 +1,11 @@
 // Clock firmware: faces (mc_clock.c) + timekeeping (RTC, Wi-Fi + SNTP).
 //
 // Buttons:   PWR short press = next day brightness step; at night it wakes the screen.
+//            PWR never stops the alarm (holding it powers the board off).
+//            BOOT = stop a ringing alarm (temporary until the math dismiss, step 6).
 // Serial:    "screenshot" (used by tools/screenshot.sh), "time HH:MM[:SS]",
 //            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "status", "wake", "beep",
+//            "alarm" (show), "alarm <day 0-6, 0=Sun> HH:MM|off", "alarm test", "stop",
 //            "vol <0-100>", "bright <0-255>".
 #include <Arduino.h>
 #include <Wire.h>
@@ -13,6 +16,7 @@
 #include "mc_clock.h"
 #include "timekeeping.h"
 #include "screen.h"
+#include "alarm.h"
 
 #define BUF_LINES 40   // LVGL partial render strips: 480 x 40 RGB565, two buffers in PSRAM
 
@@ -136,9 +140,29 @@ static void handle_command(const char* cmd) {
         print_heap();
     } else if (strcmp(cmd, "status") == 0) {
         timekeeping_print_status();
+        alarm_print();
         screen_print_status();
         Serial.printf("power: battery %d%%%s, usb %s\n", power_battery_pct(),
                       power_is_charging() ? " charging" : "", power_is_vbus_in() ? "yes" : "no");
+    } else if (strcmp(cmd, "alarm") == 0) {
+        alarm_print();
+    } else if (strcmp(cmd, "alarm test") == 0) {
+        alarm_test();
+    } else if (strncmp(cmd, "alarm ", 6) == 0) {
+        int d, h, m;
+        char off[4];
+        if (sscanf(cmd + 6, "%d %d:%d", &d, &h, &m) == 3 && d >= 0 && d < 7 && h >= 0 && h < 24 &&
+            m >= 0 && m < 60) {
+            alarm_set(d, h * 60 + m);
+            alarm_print();
+        } else if (sscanf(cmd + 6, "%d %3s", &d, off) == 2 && strcmp(off, "off") == 0 && d >= 0 && d < 7) {
+            alarm_set(d, ALARM_OFF);
+            alarm_print();
+        } else {
+            Serial.println("usage: alarm <day 0-6, 0=Sun> HH:MM|off");
+        }
+    } else if (strcmp(cmd, "stop") == 0) {
+        alarm_dismiss();
     } else if (strcmp(cmd, "wake") == 0) {
         screen_wake();
     } else if (strcmp(cmd, "heap") == 0) {
@@ -197,6 +221,7 @@ void setup() {
     lvgl_init();
     mc_clock_init(lv_screen_active());
     screen_init(BRIGHTNESS[bright_idx]);
+    alarm_init();
     print_heap();
     Serial.println("ready");
 }
@@ -205,8 +230,14 @@ void loop() {
     lv_timer_handler();
     power_tick();
     timekeeping_tick();
+    alarm_tick();
     screen_tick();
     check_serial();
+
+    static bool boot_was = false;
+    bool boot = button_boot_held();
+    if (boot && !boot_was && alarm_is_ringing()) alarm_dismiss();
+    boot_was = boot;
 
     if (power_pwr_pressed()) {
         if (screen_is_dark()) {

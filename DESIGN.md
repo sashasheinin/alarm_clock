@@ -113,6 +113,9 @@ Fixed in step 2: Buddy eyes missing until first blink; face root deleted inside 
 handler (taps now go to the screen); no NULL check after `lv_zalloc`; uneven Lamp pulse; tap did
 not reset the shuffle timer; duplicate sun-colour call.
 
+Also fixed in step 3: `STAR_POS` was `uint8_t`, so x positions above 255 wrapped and four
+stars were drawn on the left half.
+
 Open, seen on the board:
 - Clouds start off-screen on the left, so for the first ~20 s after switching to Sky the sky
   is empty.
@@ -137,6 +140,10 @@ Same rule for Clawdmeter: reuse its code, not its art or fonts.
   unplugging and power-off. If the battery is flat, the PCF85063 oscillator-stop flag (OS bit in
   register 0x04) is set at boot: treat the time as unknown.
 - Before the time is known (year < 2025), show a "time not set" state and do not fire alarms.
+  Faces show `--:--` in that state.
+- The RTC stores UTC; the timezone is applied by `localtime_r()`.
+- ESP32 system time survives a software reset (e.g. after flashing) but not a power cut or EN
+  reset, so "valid" right after a flash may come from the previous run, not the RTC.
 
 ## Next up: alarm (not implemented)
 

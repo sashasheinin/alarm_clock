@@ -29,6 +29,10 @@
 // PMU (AXP2101)
 #define AXP2101_ADDR     0x34
 
+// RTC (PCF85063), runs from the main battery via AXP2101 RTCLDO
+#define PCF85063_ADDR    0x51
+#define RTC_INT_GPIO     13
+
 // Buttons, active LOW. PWR is read through the AXP2101, see power_*.
 #define BTN_BOOT_GPIO    0
 #define BTN_EXTRA_GPIO   18
@@ -60,6 +64,12 @@ int  power_battery_pct(void);         // -1 if unknown / no battery
 bool power_is_charging(void);
 bool power_is_vbus_in(void);
 bool power_pwr_pressed(void);         // PWR short press edge, cleared on read
+
+// ---- rtc.cpp ---- (UTC; I2C, so call from the loop thread only)
+#include <time.h>
+bool rtc_present(void);
+bool rtc_read(struct tm* out, bool* time_lost);   // time_lost = oscillator stopped since last write
+bool rtc_write(const struct tm* t);
 
 // ---- buttons ----
 void buttons_init(void);

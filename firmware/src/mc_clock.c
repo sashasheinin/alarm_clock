@@ -48,7 +48,7 @@ static void set_cell(lv_obj_t *o, lv_color_t c, lv_opa_t opa)
 
 /* ------------------------------------------------------- 5x7 pixel digit grid */
 
-static const uint8_t DIGITS[10][7] = {
+static const uint8_t DIGITS[11][7] = {
     {0x0E, 0x11, 0x13, 0x15, 0x19, 0x11, 0x0E},  /* 0 */
     {0x04, 0x0C, 0x04, 0x04, 0x04, 0x04, 0x0E},  /* 1 */
     {0x0E, 0x11, 0x01, 0x02, 0x04, 0x08, 0x1F},  /* 2 */
@@ -59,7 +59,11 @@ static const uint8_t DIGITS[10][7] = {
     {0x1F, 0x01, 0x02, 0x04, 0x08, 0x08, 0x08},  /* 7 */
     {0x0E, 0x11, 0x11, 0x0E, 0x11, 0x11, 0x0E},  /* 8 */
     {0x0E, 0x11, 0x11, 0x0F, 0x01, 0x02, 0x0C},  /* 9 */
+    {0x00, 0x00, 0x00, 0x1F, 0x00, 0x00, 0x00},  /* dash: time unknown */
 };
+#define DIGIT_DASH 10
+
+static bool s_time_valid;   /* false = show --:-- (set by the manager each tick) */
 static const uint8_t DIGIT_COL[4] = {0, 6, 14, 20};   /* 25 columns total, colon at col 12 */
 
 typedef struct {
@@ -92,6 +96,10 @@ static void pc_init(pixel_clock_t *pc, lv_obj_t *parent, int x, int y, int pitch
 static void pc_set(pixel_clock_t *pc, int hh, int mm, bool colon)
 {
     int dg[4] = {hh / 10, hh % 10, mm / 10, mm % 10};
+    if (!s_time_valid) {
+        dg[0] = dg[1] = dg[2] = dg[3] = DIGIT_DASH;
+        colon = true;
+    }
     for (int d = 0; d < 4; d++) {
         if (pc->shown[d] == dg[d]) continue;
         pc->shown[d] = dg[d];
@@ -122,7 +130,7 @@ typedef struct {
     int last_min;
 } sky_t;
 
-static const uint8_t STAR_POS[8][2] = {{30,40},{120,90},{200,30},{290,70},{360,25},{420,95},{70,150},{440,170}};
+static const uint16_t STAR_POS[8][2] = {{30,40},{120,90},{200,30},{290,70},{360,25},{420,95},{70,150},{440,170}};
 
 static lv_obj_t *make_cloud(lv_obj_t *parent, int y, int ms, int delay)
 {
@@ -320,6 +328,7 @@ static void tick_cb(lv_timer_t *timer)
     time_t now = time(NULL);
     struct tm tm;
     localtime_r(&now, &tm);
+    s_time_valid = tm.tm_year + 1900 >= 2025;   /* before RTC load / NTP sync the year is 1970 */
     FACES[s_idx].update(s_root, &tm, lv_tick_get());
 }
 

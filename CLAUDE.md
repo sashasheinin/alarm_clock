@@ -10,7 +10,9 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
 
 - Steps 1-2 done (2026-10-15): the 3 faces (`firmware/src/mc_clock.c`) run on the board with
   the review fixes applied. Open face issues are in DESIGN.md "mc_clock.c review".
-- No time sync yet: the clock shows 1970 until set over serial (`time HH:MM`). Next: step 3.
+- Step 3 in progress: RTC load/save works on the board (`timekeeping.cpp`, `board/rtc.cpp`).
+  Wi-Fi + SNTP is written but untested until `firmware/src/secrets.h` exists (copy
+  `secrets.example.h`; git-ignored). Faces show `--:--` while time is unknown (untested).
 - `mc_clock_project/` holds only the browser preview and the old handoff `DESIGN.md`; the root
   `DESIGN.md` replaces it.
 
@@ -36,7 +38,7 @@ missing `scons.py`, `idf_tools.py` or `xtensa-esp32s3-elf-g++`, the toolchain ca
 PlatformIO download them again.
 
 Board code is in `firmware/src/board/` (`board.h` = pins + API). In `main.cpp`: PWR short press =
-next brightness; serial commands `screenshot`, `time HH:MM[:SS]`, `face N`, `next`, `heap`, `i2cscan`,
+next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`,
 `beep`, `vol N`, `bright N`. The step-1 hardware test screen is in commit 01ad675.
 
 ## Rules

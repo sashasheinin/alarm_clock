@@ -1,9 +1,8 @@
-// Clock firmware. Build step 2: the faces from mc_clock.c on the real board.
-// Time is not synced yet (step 3); set it over serial for testing.
+// Clock firmware: faces (mc_clock.c) + timekeeping (RTC, Wi-Fi + SNTP).
 //
 // Buttons:   PWR short press = next brightness step.
 // Serial:    "screenshot" (used by tools/screenshot.sh), "time HH:MM[:SS]",
-//            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "beep",
+//            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "status", "beep",
 //            "vol <0-100>", "bright <0-255>".
 #include <Arduino.h>
 #include <Wire.h>
@@ -12,6 +11,7 @@
 #include <sys/time.h>
 #include "board/board.h"
 #include "mc_clock.h"
+#include "timekeeping.h"
 
 #define BUF_LINES 40   // LVGL partial render strips: 480 x 40 RGB565, two buffers in PSRAM
 
@@ -96,23 +96,15 @@ static void print_heap(void) {
                   heap_caps_get_free_size(MALLOC_CAP_SPIRAM));
 }
 
-// "time HH:MM[:SS]" sets the system clock to that time on 2026-01-01.
-// No TZ is set yet, so local time = UTC until step 3.
+// "time HH:MM[:SS]": sets local time (today's date, or 2026-01-01 if unknown) and the RTC.
 static void set_time_cmd(const char* arg) {
     int h = 0, m = 0, sec = 0;
-    if (sscanf(arg, "%d:%d:%d", &h, &m, &sec) < 2 || h < 0 || h > 23 || m < 0 || m > 59) {
+    if (sscanf(arg, "%d:%d:%d", &h, &m, &sec) < 2 || h < 0 || h > 23 || m < 0 || m > 59 ||
+        sec < 0 || sec > 59) {
         Serial.println("usage: time HH:MM[:SS]");
         return;
     }
-    struct tm t = {};
-    t.tm_year = 2026 - 1900;
-    t.tm_mday = 1;
-    t.tm_hour = h;
-    t.tm_min = m;
-    t.tm_sec = sec;
-    struct timeval tv = { mktime(&t), 0 };
-    settimeofday(&tv, NULL);
-    Serial.printf("time set to %02d:%02d:%02d\n", h, m, sec);
+    timekeeping_set_manual(h, m, sec);
 }
 
 static void handle_command(const char* cmd) {
@@ -132,6 +124,8 @@ static void handle_command(const char* cmd) {
     } else if (strcmp(cmd, "next") == 0) {
         mc_clock_next();
         print_heap();
+    } else if (strcmp(cmd, "status") == 0) {
+        timekeeping_print_status();
     } else if (strcmp(cmd, "heap") == 0) {
         print_heap();
     } else if (strcmp(cmd, "i2cscan") == 0) {
@@ -174,12 +168,13 @@ static void check_serial(void) {
 void setup() {
     Serial.begin(115200);
     delay(300);
-    Serial.println("mc_clock: step 2 faces");
+    Serial.println("mc_clock: step 3 timekeeping");
     Serial.printf("PSRAM %u bytes, free heap %u bytes\n", ESP.getPsramSize(), ESP.getFreeHeap());
 
     Wire.begin(IIC_SDA, IIC_SCL);
     display_init();
     power_init();
+    timekeeping_init();
     sound_init();
     touch_init();
     buttons_init();
@@ -194,6 +189,7 @@ void setup() {
 void loop() {
     lv_timer_handler();
     power_tick();
+    timekeeping_tick();
     check_serial();
 
     if (power_pwr_pressed()) {

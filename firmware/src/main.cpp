@@ -3,7 +3,7 @@
 //
 // Buttons:   PWR short press = next brightness step.
 // Serial:    "screenshot" (used by tools/screenshot.sh), "time HH:MM[:SS]",
-//            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "beep",
+//            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "beep",
 //            "vol <0-100>", "bright <0-255>".
 #include <Arduino.h>
 #include <Wire.h>
@@ -134,6 +134,12 @@ static void handle_command(const char* cmd) {
         print_heap();
     } else if (strcmp(cmd, "heap") == 0) {
         print_heap();
+    } else if (strcmp(cmd, "i2cscan") == 0) {
+        for (uint8_t a = 1; a < 127; a++) {
+            Wire.beginTransmission(a);
+            if (Wire.endTransmission() == 0) Serial.printf("i2c: device at 0x%02X\n", a);
+        }
+        Serial.println("i2c: scan done");
     } else if (strcmp(cmd, "beep") == 0) {
         sound_beep(880, 1000);
     } else if (strncmp(cmd, "vol ", 4) == 0) {

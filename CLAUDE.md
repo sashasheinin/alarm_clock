@@ -36,7 +36,7 @@ missing `scons.py`, `idf_tools.py` or `xtensa-esp32s3-elf-g++`, the toolchain ca
 PlatformIO download them again.
 
 Board code is in `firmware/src/board/` (`board.h` = pins + API). In `main.cpp`: PWR short press =
-next brightness; serial commands `screenshot`, `time HH:MM[:SS]`, `face N`, `next`, `heap`,
+next brightness; serial commands `screenshot`, `time HH:MM[:SS]`, `face N`, `next`, `heap`, `i2cscan`,
 `beep`, `vol N`, `bright N`. The step-1 hardware test screen is in commit 01ad675.
 
 ## Rules

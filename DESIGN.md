@@ -23,8 +23,11 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 - Audio: dual mics with echo cancellation, audio codec, speaker output
 - Other: QMI8658 6-axis IMU, TF card slot, AXP2101 power management, battery header,
   PWR + BOOT buttons, one extra GPIO18 button, USB-C (ESP32-S3 native USB, programming/logs)
-- RTC chip: **unverified.** The product page was read as listing one, but Clawdmeter's 2.16 port
-  lists no RTC (only its 2.06 port has a PCF85063). Check the Waveshare schematic. See risk 1.
+- RTC chip: **PCF85063ATL at I2C 0x51**, interrupt on GPIO13. Confirmed 2026-10-15 by schematic
+  and an I2C scan on the board. Powered from the AXP2101 `RTCLDO` output (net `VCC-RTC`), which
+  runs from the Li battery or USB. There is no coin cell: the AXP2101 `VBACKUP` pin has only a
+  capacitor. So the RTC keeps time while the main battery has charge, including when the board
+  is switched off, and loses it if the battery is flat or removed with USB unplugged.
 - No camera.
 - Docs, schematics, ESP-IDF and Arduino demos: http://docs.waveshare.com/ESP32-S3-Touch-AMOLED-2.16
 
@@ -37,6 +40,8 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 | Touch CST9220 | addr 0x5A, INT 11, RST 2 (shared with display reset) |
 | PMU AXP2101 | addr 0x34; PWR key read through its IRQs |
 | IMU QMI8658 | addr 0x6B |
+| RTC PCF85063 | addr 0x51, INT GPIO13 |
+| Mic ADC ES7210 | addr 0x40 (scan also shows 0x7E, not identified) |
 | Audio ES8311 | addr 0x18; I2S MCLK 42, BCLK 9, WS 45, DOUT 8, DIN 10; amp enable GPIO 46 (HIGH = on) |
 | Buttons | BOOT = GPIO 0, extra = GPIO 18 (both active LOW), PWR = AXP2101 PKEY |
 
@@ -126,11 +131,11 @@ Same rule for Clawdmeter: reuse its code, not its art or fonts.
 
 - Wi-Fi + SNTP at boot via `configTzTime()`.
 - Timezone: `IST-2IDT,M3.4.4/26,M10.5.0` (Israel, with DST).
-- If an RTC chip exists (see risk 1): write system time to it after each successful SNTP sync,
-  and load system time from it at boot before Wi-Fi, so the clock is right with no Wi-Fi.
-- If there is no RTC chip: the ESP32 keeps time only while powered. With the battery version and
-  the AXP2101 keeping the ESP32 powered, time survives unplugging until the battery runs out.
-  After a full power loss the time is unknown until Wi-Fi returns.
+- Write system time to the RTC after each successful SNTP sync; at boot, load system time from
+  the RTC before Wi-Fi, so the clock is right with no Wi-Fi.
+- The RTC runs from the main battery (no coin cell). With a charged battery the time survives
+  unplugging and power-off. If the battery is flat, the PCF85063 oscillator-stop flag (OS bit in
+  register 0x04) is set at boot: treat the time as unknown.
 - Before the time is known (year < 2025), show a "time not set" state and do not fire alarms.
 
 ## Next up: alarm (not implemented)
@@ -142,6 +147,8 @@ Requirements:
 - Snooze: shake or flip (IMU).
 - Dismiss: solve a multiplication problem on the touchscreen (difficulty configurable). Wake-up
   check and quiet practice at once.
+- The PCF85063 has its own alarm interrupt (GPIO13). Option for later: use it to wake the board
+  from deep sleep for the alarm.
 - **The PWR key must never dismiss or snooze the alarm.** Holding it powers the board off
   (AXP2101 forced shutdown, 6 s by default; Clawdmeter raised it to 8 s). A child holding PWR to
   silence the alarm would turn the clock off. Use BOOT (GPIO 0) or GPIO 18 if a button is needed.
@@ -157,8 +164,9 @@ Requirements:
 
 ## Known risks / decisions to verify early
 
-1. **RTC chip may not exist.** Check the schematic before building time sync. Without it, offline
-   time after a full power loss is lost, which matters for alarm reliability (risk 4).
+1. **RTC depends on the main battery.** Resolved that the chip exists. Remaining risk: a flat or
+   missing battery plus a power cut loses the time. The clock must detect that (OS flag) and
+   show "time not set" instead of a wrong time, and the alarm must not fire on a wrong time.
 2. **AMOLED burn-in.** Static digits for months can leave ghosting. Mitigations to implement:
    face shuffling (done), slow pixel shift of the whole face, low brightness cap at night,
    screen-off window with tap/alarm to wake. Clawdmeter's `idle.cpp` fade/wake logic is a
@@ -185,7 +193,7 @@ Requirements:
 1. Scaffold a PlatformIO project from Clawdmeter's 2.16 board code and `main.cpp` setup, without
    BLE, splash or usage UI. Confirm display + touch work. Test speaker loudness here (risk 3).
 2. Drop in `mc_clock.c/.h`, apply the review fixes, call `mc_clock_init()`, see the 3 faces on device.
-3. Wi-Fi + SNTP + TZ (+ RTC sync if the chip exists).
+3. Wi-Fi + SNTP + TZ + RTC sync (PCF85063, OS-flag check).
 4. Burn-in protection (pixel shift, night dim, screen-off window).
 5. Alarm core (clock trigger, NVS storage, sound from TF card, volume ramp).
 6. Dismiss/snooze (math problem UI, IMU shake/flip).

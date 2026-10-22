@@ -23,9 +23,14 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   dismisses for now. Not yet tested on the board: the late-fire path and the 15 min timeout.
 - Step 5b done (2026-10-22): alarm list (up to 8: time, weekday mask, on/off, label) + "skip
   next", replacing the per-weekday schedule (old NVS key converted on first boot). Phone control
-  decided (DESIGN.md "Phone control"). Next: step 6 (math dismiss, IMU snooze).
+  decided (DESIGN.md "Phone control").
+- Step 6 part 1 done (2026-10-22, `dismiss.cpp`): while ringing, a full-screen keypad with an
+  N x M problem (2-9) covers the face; one correct answer stops the alarm. BOOT no longer stops
+  it; serial `stop` still does. Touch was rotated 90 degrees (never noticed: faces only use "tap
+  anywhere"); fixed in `board/touch.cpp`, check with serial `touchlog`.
+  Next: step 6 part 2, IMU snooze.
 - **Alarm is currently OFF on the board** (2026-10-22): one alarm `0: 06:45 Sun-Fri "School"`,
-  switched off until step 6 works. Restore with serial `alarm on 0`.
+  switched off until the user decides to turn it on (math dismiss works; snooze not built). Restore with serial `alarm on 0`.
 - Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards
   (`time $(TZ=Asia/Jerusalem date +%H:%M:%S)`), or wait for the hourly NTP sync.
 - Offline test build: `PLATFORMIO_BUILD_FLAGS=-DCLOCK_NO_WIFI platformio run -e clock -t upload`.
@@ -56,7 +61,7 @@ PlatformIO download them again.
 
 Board code is in `firmware/src/board/` (`board.h` = pins + API). In `main.cpp`: PWR short press =
 next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`, `wake`, `alarm` (list), `alarm add HH:MM DAYS [label]`, `alarm set N ...`,
-`alarm on|off|del N`, `alarm skip [off]`, `alarm test`, `stop` (DAYS = digits 0-6, 0 = Sunday),
+`alarm on|off|del N`, `alarm skip [off]`, `alarm test`, `stop` (DAYS = digits 0-6, 0 = Sunday), `touchlog`,
 `beep`, `vol N`, `bright N`. The step-1 hardware test screen is in commit 01ad675.
 
 ## Rules

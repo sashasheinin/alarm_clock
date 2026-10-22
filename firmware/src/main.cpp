@@ -2,13 +2,14 @@
 //
 // Buttons:   PWR short press = next day brightness step; at night it wakes the screen.
 //            PWR never stops the alarm (holding it powers the board off).
-//            BOOT = stop a ringing alarm (temporary until the math dismiss, step 6).
+//            A ringing alarm stops only by solving the math problem (dismiss.cpp),
+//            serial "stop", or the 15 min timeout.
 // Serial:    "screenshot" (used by tools/screenshot.sh), "time HH:MM[:SS]",
 //            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "status", "wake", "beep",
 //            "alarm" (list), "alarm add HH:MM DAYS [label]", "alarm set N HH:MM DAYS [label]",
 //            "alarm on N", "alarm off N", "alarm del N", "alarm skip [off]", "alarm test", "stop",
 //            (DAYS = digits 0-6, 0 = Sunday, e.g. 012345 = Sun-Fri)
-//            "vol <0-100>", "bright <0-255>".
+//            "vol <0-100>", "bright <0-255>", "touchlog" (toggle).
 #include <Arduino.h>
 #include <Wire.h>
 #include <lvgl.h>
@@ -19,6 +20,7 @@
 #include "timekeeping.h"
 #include "screen.h"
 #include "alarm.h"
+#include "dismiss.h"
 
 #define BUF_LINES 40   // LVGL partial render strips: 480 x 40 RGB565, two buffers in PSRAM
 
@@ -41,12 +43,17 @@ static void rounder_cb(lv_event_t* e) {
     display_round_area(&a->x1, &a->y1, &a->x2, &a->y2);
 }
 
+static bool touch_log = false;   // serial "touchlog": print each press position
+
 static void touch_cb(lv_indev_t* indev, lv_indev_data_t* data) {
     (void)indev;
+    static bool was_pressed = false;
     static bool swallow = false;   // the touch that woke a dark screen must not also switch faces
     uint16_t x, y;
     bool pressed;
     touch_read(&x, &y, &pressed);
+    if (touch_log && pressed && !was_pressed) Serial.printf("touch %u,%u\n", x, y);
+    was_pressed = pressed;
     if (pressed && screen_is_dark()) {
         screen_wake();
         swallow = true;
@@ -90,7 +97,7 @@ static void send_screenshot(void) {
 
     lv_draw_buf_t draw_buf;
     lv_draw_buf_init(&draw_buf, LCD_WIDTH, LCD_HEIGHT, LV_COLOR_FORMAT_RGB565, row_bytes, sbuf, buf_size);
-    if (lv_snapshot_take_to_draw_buf(lv_screen_active(), LV_COLOR_FORMAT_RGB565, &draw_buf) != LV_RESULT_OK) {
+    if (lv_snapshot_take_to_draw_buf(dismiss_overlay() ? dismiss_overlay() : lv_screen_active(), LV_COLOR_FORMAT_RGB565, &draw_buf) != LV_RESULT_OK) {
         heap_caps_free(sbuf);
         Serial.println("SCREENSHOT_ERR");
         return;
@@ -196,6 +203,9 @@ static void handle_command(const char* cmd) {
         alarm_test();
     } else if (strncmp(cmd, "alarm ", 6) == 0) {
         alarm_command(cmd + 6);
+    } else if (strcmp(cmd, "touchlog") == 0) {
+        touch_log = !touch_log;
+        Serial.printf("touchlog %s\n", touch_log ? "on" : "off");
     } else if (strcmp(cmd, "stop") == 0) {
         alarm_dismiss();
     } else if (strcmp(cmd, "wake") == 0) {
@@ -266,13 +276,9 @@ void loop() {
     power_tick();
     timekeeping_tick();
     alarm_tick();
+    dismiss_tick();
     screen_tick();
     check_serial();
-
-    static bool boot_was = false;
-    bool boot = button_boot_held();
-    if (boot && !boot_was && alarm_is_ringing()) alarm_dismiss();
-    boot_was = boot;
 
     if (power_pwr_pressed()) {
         if (screen_is_dark()) {

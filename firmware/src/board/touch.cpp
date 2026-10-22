@@ -37,8 +37,11 @@ void touch_read(uint16_t* x, uint16_t* y, bool* pressed) {
         uint8_t n = touch.getPoint(tx, ty, touch.getSupportTouchPoint());
         if (n > 0) {
             touch_pressed = true;
-            touch_x = (uint16_t)tx[0];
-            touch_y = (uint16_t)ty[0];
+            // With the swap/mirror settings above (from Clawdmeter) the panel still reports
+            // positions turned 90 degrees from the display: (480 - y, x). Measured on
+            // 2026-10-22 by tapping keypad keys with serial "touchlog". Turn them back.
+            touch_x = (uint16_t)ty[0];
+            touch_y = (uint16_t)(LCD_HEIGHT - 1 - tx[0]);
         } else {
             touch_pressed = false;
         }

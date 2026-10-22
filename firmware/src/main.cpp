@@ -200,6 +200,7 @@ static void handle_command(const char* cmd) {
         timekeeping_print_status();
         alarm_print();
         web_print_status();
+        settings_print();
         screen_print_status();
         Serial.printf("power: battery %d%%%s, usb %s\n", power_battery_pct(),
                       power_is_charging() ? " charging" : "", power_is_vbus_in() ? "yes" : "no");
@@ -279,7 +280,6 @@ void setup() {
     power_init();
     timekeeping_init();
     sound_init();
-    settings_init();
     imu_init();
     touch_init();
     buttons_init();
@@ -287,6 +287,7 @@ void setup() {
     lvgl_init();
     mc_clock_init(lv_screen_active());
     screen_init(BRIGHTNESS[bright_idx]);
+    settings_init();
     alarm_init();
     print_heap();
     Serial.println("ready");

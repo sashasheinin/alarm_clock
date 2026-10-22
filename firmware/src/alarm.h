@@ -5,8 +5,8 @@
 // fires up to ALARM_LATE_MIN late. The last handled alarm is saved as a minute stamp,
 // so a reboot does not ring twice, and two alarms due at once ring only once.
 // "Skip next" silences the next alarm due to ring, then clears itself.
-// Snooze (shake/flip, gesture.cpp) stops the sound for ALARM_SNOOZE_MIN, at most
-// ALARM_MAX_SNOOZES times per alarm. The snooze end is saved in NVS, so a reboot during
+// Snooze (shake/flip, gesture.cpp) stops the sound for a few minutes, a limited number of
+// times per alarm (alarm_set_snooze). The snooze end is saved in NVS, so a reboot during
 // a snooze still rings again. Only the math dismiss (or the timeout) ends the alarm.
 // Call everything from loop() only (same thread as alarm_tick).
 #include <stdint.h>
@@ -16,10 +16,10 @@
 #define ALARM_LABEL_LEN   16                    // including the terminating 0
 #define ALARM_LATE_MIN    30                    // fire up to this many minutes late
 #define ALARM_MAX_RING_MS (15UL * 60 * 1000)    // stop ringing by itself after this
-#ifndef ALARM_SNOOZE_MIN                        // a test build can pass -DALARM_SNOOZE_MIN=1
+#ifndef ALARM_SNOOZE_MIN                        // default; a test build can pass -DALARM_SNOOZE_MIN=1
 #define ALARM_SNOOZE_MIN  5
 #endif
-#define ALARM_MAX_SNOOZES 2
+#define ALARM_MAX_SNOOZES 2                     // default; both can be changed with alarm_set_snooze()
 
 typedef struct {
     uint8_t enabled;
@@ -35,6 +35,7 @@ bool alarm_is_active(void);          // ringing or snoozed: the alarm is not ove
 void alarm_dismiss(void);            // math problem (dismiss.cpp) or serial "stop"
 bool alarm_snooze(void);             // false if not ringing or no snoozes left
 int  alarm_snoozes_left(void);
+void alarm_set_snooze(int minutes, int max_count);   // 1-30 min, 0-5 snoozes (0 = no snooze)
 time_t alarm_snooze_until(void);     // 0 if not snoozed
 void alarm_test(void);               // ring now (serial "alarm test")
 

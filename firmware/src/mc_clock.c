@@ -322,6 +322,7 @@ static lv_timer_t *s_shuffle;
 static int s_idx = -1;
 static int s_dx, s_dy;          /* pixel-shift offset */
 static bool s_asleep;
+static unsigned s_enabled = ~0u;   /* faces in the shuffle (bit per face) */
 
 static void tick_cb(lv_timer_t *timer)
 {
@@ -349,9 +350,15 @@ static void show(int idx)
 
 void mc_clock_next(void)
 {
-    int n;
-    do { n = esp_random() % FACE_COUNT; } while (n == s_idx && FACE_COUNT > 1);
-    show(n);
+    int pool[FACE_COUNT], count = 0;
+    for (int i = 0; i < FACE_COUNT; i++)
+        if ((s_enabled & (1u << i)) && i != s_idx) pool[count++] = i;
+    if (count == 0) {                                   /* only the current face is enabled */
+        if (s_idx >= 0 && s_root) return;
+        for (int i = 0; i < FACE_COUNT; i++)
+            if (s_enabled & (1u << i)) pool[count++] = i;
+    }
+    show(pool[esp_random() % count]);
     if (s_shuffle) lv_timer_reset(s_shuffle);   /* a hand-picked face gets the full interval */
 }
 
@@ -363,6 +370,15 @@ void mc_clock_show(int idx)
 }
 
 int mc_clock_face_count(void) { return FACE_COUNT; }
+
+const char *mc_clock_face_name(int idx) { return (idx >= 0 && idx < FACE_COUNT) ? FACES[idx].name : ""; }
+
+void mc_clock_set_enabled(unsigned mask)
+{
+    mask &= (1u << FACE_COUNT) - 1;
+    s_enabled = mask ? mask : ~0u;
+    if (s_screen && !s_asleep && s_idx >= 0 && !(s_enabled & (1u << s_idx))) mc_clock_next();
+}
 
 void mc_clock_set_offset(int dx, int dy)
 {

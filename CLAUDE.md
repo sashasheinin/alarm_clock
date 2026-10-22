@@ -32,14 +32,20 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   or shake to snooze 5 min, at most 2 per alarm; snooze end saved in NVS (survives a reboot).
   The math screen stays up during a snooze. Thresholds come from 20 Hz recordings (pickups and
   tilting toward the face must not snooze); numbers in `gesture.cpp`. QMI8658 low-pass filter
-  must stay LPF_MODE_3: MODE_0 smoothed shakes away. Test build with a 1 min snooze:
-  `PLATFORMIO_BUILD_FLAGS=-DALARM_SNOOZE_MIN=1`. Serial `imulog`/`gesturelog` show the data.
+  must stay LPF_MODE_3: MODE_0 smoothed shakes away. To test snooze quickly, set the snooze to
+  1 min on the phone page (saved settings override `-DALARM_SNOOZE_MIN`). Serial
+  `imulog`/`gesturelog` show the data.
 - Step 7a done (2026-10-22, `web.cpp`, `settings.cpp`): phone page at http://clock.local or
   http://192.168.0.111 (reserve this IP in the router): alarm list, skip next, volume (saved in
   NVS; serial `vol` is temporary). Changes need the parent PIN, set over serial `pin NNNN`;
   5 wrong PINs lock changes for 1 min. API: GET /api/state, POST /api/alarm|delete|skip|volume|beep
   (form fields, `pin` in each). Checked with curl + Playwright (Pixel 7); not yet on the user's phone.
-  Next: step 7b, the other settings (snooze length, difficulty, faces, brightness, night hours).
+- Step 7b done (2026-10-22): the page also sets ramp length, snooze length and count, problem
+  range and how many in a row, enabled faces, day brightness, night-off window (or none).
+  `settings.cpp` keeps them in NVS and applies them through module setters (`alarm_set_snooze`,
+  `dismiss_set_problems`, `mc_clock_set_enabled`, `screen_set_night`, `sound_set_ramp_ms`), so the
+  modules don't depend on settings. PWR brightness steps and serial `vol` last until reboot.
+  Next: DESIGN.md "Build order" step 8 (more faces), or WAV sounds / bedtime face.
 - **Alarm is currently OFF on the board** (2026-10-22): one alarm `0: 06:45 Sun-Fri "School"`,
   switched off until the user decides to turn it on (dismiss and snooze both work). Restore with serial `alarm on 0`.
 - Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards

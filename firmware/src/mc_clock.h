@@ -13,6 +13,8 @@ void mc_clock_init(lv_obj_t *screen);
 void mc_clock_next(void);          /* random face other than the current one */
 void mc_clock_show(int idx);       /* specific face, 0..mc_clock_face_count()-1 */
 int  mc_clock_face_count(void);
+const char *mc_clock_face_name(int idx);
+void mc_clock_set_enabled(unsigned mask);  /* bit i = face i in the shuffle; 0 = all */
 void mc_clock_set_offset(int dx, int dy);   /* burn-in pixel shift, applied to every face */
 void mc_clock_sleep(void);         /* delete the face (stops animations and redraws) */
 void mc_clock_wake(void);          /* random face again */

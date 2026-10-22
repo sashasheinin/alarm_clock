@@ -87,5 +87,6 @@ void sound_set_volume(uint8_t vol);   // 0..100, codec digital volume
 uint8_t sound_get_volume(void);
 void sound_beep(uint16_t freq_hz, uint16_t ms);  // non-blocking; ignored while playing
 bool sound_is_playing(void);
-bool sound_alarm_start(void);         // repeating pattern, loudness ramps up over 60 s; false if busy
+bool sound_alarm_start(void);         // repeating pattern, loudness ramps up (sound_set_ramp_ms); false if busy
+void sound_set_ramp_ms(uint32_t ms);  // 15% -> 100% over this long; default 60 s, 0 = full at once
 void sound_alarm_stop(void);          // returns at once; playback ends within ~10 ms

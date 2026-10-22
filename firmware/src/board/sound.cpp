@@ -47,14 +47,16 @@ static void tone_task(void* arg) {
 }
 
 // Alarm: repeating "beep-beep ... pause" pattern until sound_alarm_stop().
-// Loudness ramps from ALARM_START_LEVEL to full over ALARM_RAMP_MS by scaling
+// Loudness ramps from ALARM_START_LEVEL to full over ramp_ms by scaling
 // the samples here, so nothing touches the I2C codec while it plays.
-#define ALARM_RAMP_MS      60000
+static volatile uint32_t ramp_ms = 60000;   // read by the alarm task; 0 = full at once
 #define ALARM_START_LEVEL  0.15f
 #define ALARM_FREQ_HZ      1000
 
 // pattern in 10 ms chunks: on, off, on, off(long)
 static const uint8_t ALARM_PATTERN[] = {15, 8, 15, 40};
+
+void sound_set_ramp_ms(uint32_t ms) { ramp_ms = ms; }
 
 static void alarm_task(void* arg) {
     (void)arg;
@@ -69,7 +71,7 @@ static void alarm_task(void* arg) {
         for (int seg = 0; seg < (int)sizeof(ALARM_PATTERN) && !alarm_stop_req; seg++) {
             bool on = (seg % 2) == 0;
             for (int c = 0; c < ALARM_PATTERN[seg] && !alarm_stop_req; c++) {
-                float ramp = (float)(millis() - start) / ALARM_RAMP_MS;
+                float ramp = ramp_ms ? (float)(millis() - start) / ramp_ms : 1.0f;
                 float level = ALARM_START_LEVEL + (1.0f - ALARM_START_LEVEL) * (ramp > 1.0f ? 1.0f : ramp);
                 for (int i = 0; i < TONE_CHUNK_FRAMES; i++) {
                     int16_t v = on ? (int16_t)(sinf(phase) * 30000.0f * level) : 0;

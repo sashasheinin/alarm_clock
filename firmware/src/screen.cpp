@@ -13,6 +13,8 @@ static const int8_t SHIFT[][2] = {{0, 0}, {2, 0}, {4, 0}, {4, 2}, {4, 4}, {2, 4}
 #define SHIFT_COUNT ((int)(sizeof(SHIFT) / sizeof(SHIFT[0])))
 
 static uint8_t  day_level  = 200;
+static int      night_start = 22 * 60;   // minutes after midnight
+static int      night_end   = 6 * 60;
 static bool     dark       = false;
 static uint8_t  applied    = 0;        // brightness currently on the panel
 static uint32_t wake_until = 0;        // millis() until which a night wake lasts
@@ -24,7 +26,10 @@ static bool is_night(void) {
     time_t now = time(NULL);
     struct tm t;
     localtime_r(&now, &t);
-    return t.tm_hour >= NIGHT_START_HOUR || t.tm_hour < NIGHT_END_HOUR;
+    int m = t.tm_hour * 60 + t.tm_min;
+    if (night_start == night_end) return false;
+    if (night_start < night_end) return m >= night_start && m < night_end;
+    return m >= night_start || m < night_end;          // crosses midnight
 }
 
 static void set_dark(bool d) {
@@ -79,6 +84,12 @@ bool screen_is_dark(void) { return dark; }
 void screen_wake(void) {
     wake_until = millis() + NIGHT_WAKE_MS;
     screen_tick();
+}
+
+void screen_set_night(int start_min, int end_min) {
+    if (start_min < 0 || start_min >= 24 * 60 || end_min < 0 || end_min >= 24 * 60) return;
+    night_start = start_min;
+    night_end = end_min;              // screen_tick() applies it on the next loop
 }
 
 void screen_set_day_brightness(uint8_t level) {

@@ -20,6 +20,8 @@ static int32_t  handled_min = 0;       // minute stamp of the last handled alarm
 static int32_t  skip_min    = 0;       // alarms due at or before this minute are skipped; 0 = none
 static int32_t  snooze_end  = 0;       // epoch seconds when a snoozed alarm rings again; 0 = none
 static uint8_t  snoozes     = 0;       // snoozes used by the current alarm
+static int      snooze_min  = ALARM_SNOOZE_MIN;
+static int      max_snoozes = ALARM_MAX_SNOOZES;
 static bool     ringing     = false;
 static uint32_t ring_start  = 0;
 static uint32_t last_check  = 0;
@@ -223,16 +225,21 @@ void alarm_dismiss(void)    { alarm_dismiss_reason("dismissed"); }
 void alarm_test(void)       { start_ringing("test"); }
 
 bool alarm_snooze(void) {
-    if (!ringing || snoozes >= ALARM_MAX_SNOOZES) return false;
+    if (!ringing || snoozes >= max_snoozes) return false;
     stop_ringing("snoozed");
     snoozes++;
-    snooze_end = (int32_t)time(NULL) + ALARM_SNOOZE_MIN * 60;
+    snooze_end = (int32_t)time(NULL) + snooze_min * 60;
     save_snooze();
-    Serial.printf("alarm: snoozed %d min (%d left)\n", ALARM_SNOOZE_MIN, ALARM_MAX_SNOOZES - snoozes);
+    Serial.printf("alarm: snoozed %d min (%d left)\n", snooze_min, alarm_snoozes_left());
     return true;
 }
 
-int    alarm_snoozes_left(void) { return ALARM_MAX_SNOOZES - snoozes; }
+int    alarm_snoozes_left(void) { return snoozes < max_snoozes ? max_snoozes - snoozes : 0; }
+
+void alarm_set_snooze(int minutes, int max_count) {
+    if (minutes >= 1 && minutes <= 30) snooze_min = minutes;
+    if (max_count >= 0 && max_count <= 5) max_snoozes = max_count;
+}
 time_t alarm_snooze_until(void) { return snooze_end; }
 
 // After any change to the list, alarms already past their minute must not fire late

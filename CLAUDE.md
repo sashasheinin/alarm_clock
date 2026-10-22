@@ -45,7 +45,10 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   `settings.cpp` keeps them in NVS and applies them through module setters (`alarm_set_snooze`,
   `dismiss_set_problems`, `mc_clock_set_enabled`, `screen_set_night`, `sound_set_ramp_ms`), so the
   modules don't depend on settings. PWR brightness steps and serial `vol` last until reboot.
-  Next: DESIGN.md "Build order" step 8 (more faces), or WAV sounds / bedtime face.
+- Step 8 (2026-10-22): faces 4-6 added, Cave, Torch, Nether (DESIGN.md "Faces implemented"),
+  each checked by screenshot. Faces added by a firmware update start enabled (`settings.cpp`
+  stores the face count with the mask). Keep a face under ~300 objects: Cave leaves 112 KB free.
+  Next: WAV sounds from the TF card, or use Torch as the night-wake / bedtime face.
 - **Alarm is currently OFF on the board** (2026-10-22): one alarm `0: 06:45 Sun-Fri "School"`,
   switched off until the user decides to turn it on (dismiss and snooze both work). Restore with serial `alarm on 0`.
 - Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards

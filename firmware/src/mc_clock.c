@@ -5,6 +5,9 @@
  *  1. Sky      - blocky sun/moon follows the real time of day, drifting clouds, grass+dirt ground
  *  2. Lamp     - 5x7 "lamp" digits on a dark wall, redstone-style signal pulse along the bottom
  *  3. Buddy    - friendly green block face that blinks, time underneath
+ *  4. Cave     - stone wall, sparkling diamond-ore digits, a block that cracks over each minute
+ *  5. Torch    - nearly black, a flickering torch and dim warm digits (for the night)
+ *  6. Nether   - dark red rock, glowing orange digits, a lava pool with slow waves and bubbles
  */
 #include "mc_clock.h"
 #include <stdlib.h>
@@ -302,6 +305,219 @@ static void buddy_update(lv_obj_t *root, const struct tm *t, uint32_t tick)
     pc_set(&b->pc, t->tm_hour, t->tm_min, (t->tm_sec & 1) == 0);
 }
 
+/* ===================================================================== 4. CAVE */
+
+/* Stone wall, diamond-ore digits that sparkle, and a block below that cracks over each
+ * minute and breaks at :00 into the next ore. */
+#define CAVE_CELL   16          /* mining block: 8x8 cells */
+#define CAVE_BX     (240 - 4 * CAVE_CELL)
+#define CAVE_BY     300
+#define CAVE_CRACKS 24
+
+typedef struct { uint32_t speck, dark; } ore_t;
+static const ore_t ORES[] = {
+    {0xD8AF93, 0x9C7A64},   /* iron */
+    {0xFCDC3C, 0xC79A1E},   /* gold */
+    {0xE8261C, 0x9A1510},   /* redstone */
+    {0x3FE07A, 0x1E9A4A},   /* emerald */
+    {0x5FE8E2, 0x2BA5A0},   /* diamond */
+    {0x3060E0, 0x1C3A8C},   /* lapis (no coal: its specks look like the cracks) */
+};
+#define ORE_COUNT ((int)(sizeof(ORES) / sizeof(ORES[0])))
+
+/* ore specks in the 8x8 block: 0 = stone, 1 = ore, 2 = ore shadow */
+static const uint8_t ORE_MAP[8][8] = {
+    {0,0,0,0,0,0,0,0}, {0,1,1,0,0,0,0,0}, {0,1,2,0,0,1,1,0}, {0,0,0,0,0,1,2,0},
+    {0,0,0,1,0,0,0,0}, {0,0,1,2,0,0,1,0}, {0,0,0,0,0,1,2,0}, {0,0,0,0,0,0,0,0},
+};
+/* crack path from the middle outwards, one cell per 2.5 s */
+static const uint8_t CRACK[CAVE_CRACKS][2] = {
+    {3,3},{4,4},{3,4},{2,4},{4,3},{5,5},{2,2},{1,4},{5,2},{6,5},{1,1},{4,6},
+    {6,2},{2,6},{0,4},{6,6},{7,1},{1,6},{3,1},{5,7},{0,1},{7,4},{2,0},{7,6},
+};
+static const uint32_t STONES[4] = {0x6B6B6B, 0x747474, 0x626262, 0x5A5A5A};
+
+typedef struct {
+    pixel_clock_t pc;
+    lv_obj_t *blk[8][8];
+    int8_t ore, cracked;       /* ore index shown, crack cells drawn (-1 = redraw) */
+    lv_obj_t *spark;           /* digit cell lit white right now, or NULL */
+} cave_t;
+
+static uint32_t stone_shade(int r, int c) { return STONES[(r * 7 + c * 11 + (r * c) % 5) % 4]; }
+
+static void cave_draw_block(cave_t *k, int ore)
+{
+    for (int r = 0; r < 8; r++)
+        for (int c = 0; c < 8; c++) {
+            uint32_t col = ORE_MAP[r][c] == 1 ? ORES[ore].speck
+                         : ORE_MAP[r][c] == 2 ? ORES[ore].dark : stone_shade(r + 3, c + 1);
+            set_cell(k->blk[r][c], lv_color_hex(col), LV_OPA_COVER);
+        }
+}
+
+static lv_obj_t *cave_create(lv_obj_t *parent)
+{
+    cave_t *k = lv_zalloc(sizeof(*k));
+    if (!k) return NULL;
+    lv_obj_t *root = make_root(parent, 0x5A5A5A, k);
+
+    for (int r = 0; r < 12; r++)             /* stone wall, 40 px blocks */
+        for (int c = 0; c < 12; c++)
+            px(root, c * 40, r * 40, 40, 40, stone_shade(r, c) - 0x1C1C1C, LV_OPA_COVER);
+
+    pc_init(&k->pc, root, PC_X(17, 15), 120, 17, 15, 0x5FE8E2, 0, LV_OPA_TRANSP);
+
+    px(root, CAVE_BX - 4, CAVE_BY - 4, 8 * CAVE_CELL + 8, 8 * CAVE_CELL + 8, 0x2A2A2A, LV_OPA_COVER);
+    for (int r = 0; r < 8; r++)
+        for (int c = 0; c < 8; c++)
+            k->blk[r][c] = px(root, CAVE_BX + c * CAVE_CELL, CAVE_BY + r * CAVE_CELL,
+                              CAVE_CELL, CAVE_CELL, 0, LV_OPA_COVER);
+    k->ore = -1;
+    k->cracked = -1;
+    return root;
+}
+
+static void cave_update(lv_obj_t *root, const struct tm *t, uint32_t tick)
+{
+    (void)tick;
+    cave_t *k = lv_obj_get_user_data(root);
+
+    if (k->spark) set_cell(k->spark, k->pc.on, LV_OPA_COVER);   /* last tick's sparkle off */
+    k->spark = NULL;
+    pc_set(&k->pc, t->tm_hour, t->tm_min, (t->tm_sec & 1) == 0);
+    if (s_time_valid && esp_random() % 3 == 0) {                /* sparkle one lit cell */
+        int d = esp_random() % 4, r = esp_random() % 7, c = esp_random() % 5;
+        if (DIGITS[k->pc.shown[d]][r] & (1 << (4 - c))) {
+            k->spark = k->pc.cell[d][r][c];
+            set_cell(k->spark, lv_color_hex(0xFFFFFF), LV_OPA_COVER);
+        }
+    }
+
+    int ore = t->tm_min % ORE_COUNT;
+    int cracked = t->tm_sec * CAVE_CRACKS / 60;
+    if (ore != k->ore || cracked < k->cracked) {                /* new minute: fresh block */
+        k->ore = ore;
+        cave_draw_block(k, ore);
+        k->cracked = 0;
+    }
+    for (; k->cracked < cracked; k->cracked++)
+        set_cell(k->blk[CRACK[k->cracked][0]][CRACK[k->cracked][1]], lv_color_hex(0x1C1C1C), LV_OPA_COVER);
+}
+
+/* ==================================================================== 5. TORCH */
+
+/* Nearly black, one flickering torch and dim warm digits: few lit pixels for the night. */
+#define TORCH_CELL 16
+#define TORCH_X    (240 - 2 * TORCH_CELL)    /* flame is 4 cells wide, stick 2 */
+#define TORCH_Y    64
+
+static const uint32_t FLAMES[4] = {0xFFE07A, 0xFFC23A, 0xFF8C1A, 0xE0561A};
+
+typedef struct {
+    pixel_clock_t pc;
+    lv_obj_t *flame[4][4];
+    lv_obj_t *glow[12];
+} torch_t;
+
+static lv_obj_t *torch_create(lv_obj_t *parent)
+{
+    torch_t *k = lv_zalloc(sizeof(*k));
+    if (!k) return NULL;
+    lv_obj_t *root = make_root(parent, 0x050302, k);
+
+    /* glow: a ring of faint warm squares around the flame */
+    static const int8_t GLOW[12][2] = {{-1,0},{-1,1},{-1,2},{-1,3},{4,0},{4,1},{4,2},{4,3},
+                                       {0,-1},{1,-1},{2,-1},{3,-1}};
+    for (int i = 0; i < 12; i++)
+        k->glow[i] = px(root, TORCH_X + GLOW[i][1] * TORCH_CELL, TORCH_Y + GLOW[i][0] * TORCH_CELL,
+                        TORCH_CELL, TORCH_CELL, 0xFF9A30, LV_OPA_20);
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++)
+            k->flame[r][c] = px(root, TORCH_X + c * TORCH_CELL, TORCH_Y + r * TORCH_CELL,
+                                TORCH_CELL, TORCH_CELL, FLAMES[r], LV_OPA_COVER);
+    for (int r = 0; r < 8; r++)               /* stick, two shades of wood */
+        for (int c = 0; c < 2; c++)
+            px(root, TORCH_X + (c + 1) * TORCH_CELL, TORCH_Y + (r + 4) * TORCH_CELL, TORCH_CELL,
+               TORCH_CELL, c ? 0x4A3018 : 0x6B4626, LV_OPA_COVER);
+
+    pc_init(&k->pc, root, PC_X(13, 11), 300, 13, 11, 0xB07838, 0, LV_OPA_TRANSP);
+    return root;
+}
+
+static void torch_update(lv_obj_t *root, const struct tm *t, uint32_t tick)
+{
+    (void)tick;
+    torch_t *k = lv_obj_get_user_data(root);
+    for (int r = 0; r < 4; r++)
+        for (int c = 0; c < 4; c++) {
+            /* top row and outer columns flicker in and out; the core stays lit */
+            bool edge = r == 0 || c == 0 || c == 3;
+            uint32_t rnd = esp_random();
+            if (edge && (rnd & 3) == 0) {
+                set_cell(k->flame[r][c], lv_color_hex(0), LV_OPA_TRANSP);
+            } else {
+                int shade = r + (int)((rnd >> 2) % 2) - (r == 3 ? 1 : 0);
+                set_cell(k->flame[r][c], lv_color_hex(FLAMES[shade > 3 ? 3 : shade]), LV_OPA_COVER);
+            }
+        }
+    for (int i = 0; i < 12; i++)
+        lv_obj_set_style_bg_opa(k->glow[i], (lv_opa_t)(25 + esp_random() % 30), 0);
+    pc_set(&k->pc, t->tm_hour, t->tm_min, (t->tm_sec & 1) == 0);
+}
+
+/* =================================================================== 6. NETHER */
+
+/* Dark red rock, glowing orange digits, a lava pool along the bottom with slow waves
+ * and the odd bubble. */
+#define LAVA_ROWS 3
+#define LAVA_COLS 12
+#define LAVA_Y    (480 - LAVA_ROWS * 40)
+
+static const uint32_t NETHERRACK[4] = {0x5A1A1A, 0x6B2020, 0x4A1414, 0x732424};
+static const uint32_t LAVA[6] = {0xC8380C, 0xE0500E, 0xF2701A, 0xFF9426, 0xF2701A, 0xE0500E};
+
+typedef struct {
+    pixel_clock_t pc;
+    lv_obj_t *lava[LAVA_ROWS][LAVA_COLS];
+    int phase;
+} nether_t;
+
+static lv_obj_t *nether_create(lv_obj_t *parent)
+{
+    nether_t *k = lv_zalloc(sizeof(*k));
+    if (!k) return NULL;
+    lv_obj_t *root = make_root(parent, 0x4A1414, k);
+
+    for (int r = 0; r < 8; r++)               /* rock, 48 px blocks, above the lava */
+        for (int c = 0; c < 10; c++)
+            px(root, c * 48, r * 48, 48, 48, NETHERRACK[(r * 7 + c * 5 + (r * c) % 3) % 4], LV_OPA_COVER);
+    for (int r = 0; r < LAVA_ROWS; r++)
+        for (int c = 0; c < LAVA_COLS; c++)
+            k->lava[r][c] = px(root, c * 40, LAVA_Y + r * 40, 40, 40, LAVA[0], LV_OPA_COVER);
+
+    pc_init(&k->pc, root, PC_X(17, 15), 130, 17, 15, 0xFFB238, 0, LV_OPA_TRANSP);
+    k->phase = -1;
+    return root;
+}
+
+static void nether_update(lv_obj_t *root, const struct tm *t, uint32_t tick)
+{
+    nether_t *k = lv_obj_get_user_data(root);
+    pc_set(&k->pc, t->tm_hour, t->tm_min, (t->tm_sec & 1) == 0);
+
+    int phase = (tick / (2 * MC_TICK_MS)) % 6;      /* waves move one step every 400 ms */
+    if (phase == k->phase) return;
+    k->phase = phase;
+    int bubble = esp_random() % (LAVA_COLS * 4);    /* about one bubble in four steps */
+    for (int r = 0; r < LAVA_ROWS; r++)
+        for (int c = 0; c < LAVA_COLS; c++) {
+            uint32_t col = LAVA[(c + r * 2 + phase) % 6];
+            if (r == 0 && c == bubble) col = 0xFFD86A;
+            set_cell(k->lava[r][c], lv_color_hex(col), LV_OPA_COVER);
+        }
+}
+
 /* ================================================================== manager */
 
 typedef struct {
@@ -314,6 +530,9 @@ static const face_t FACES[] = {
     {"sky",   sky_create,   sky_update},
     {"lamp",  lamp_create,  lamp_update},
     {"buddy", buddy_create, buddy_update},
+    {"cave",  cave_create,  cave_update},
+    {"torch", torch_create, torch_update},
+    {"nether", nether_create, nether_update},
 };
 #define FACE_COUNT ((int)(sizeof(FACES) / sizeof(FACES[0])))
 

@@ -5,7 +5,7 @@
 //            A ringing alarm stops only by solving the math problem (dismiss.cpp),
 //            serial "stop", or the 15 min timeout. Flip/shake snoozes (gesture.cpp).
 // Serial:    "screenshot" (used by tools/screenshot.sh), "time HH:MM[:SS]",
-//            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "status", "wake", "beep",
+//            "face N" (0 sky, 1 lamp, 2 buddy, 3 cave, 4 torch, 5 nether), "next", "heap", "i2cscan", "status", "wake", "beep",
 //            "alarm" (list), "alarm add HH:MM DAYS [label]", "alarm set N HH:MM DAYS [label]",
 //            "alarm on N", "alarm off N", "alarm del N", "alarm skip [off]", "alarm test", "stop",
 //            (DAYS = digits 0-6, 0 = Sunday, e.g. 012345 = Sun-Fri)

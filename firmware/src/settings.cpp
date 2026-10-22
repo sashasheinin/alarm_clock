@@ -35,6 +35,7 @@ static void apply(void) {
 static void save(void) {
     prefs.putUChar("ver", STORE_VERSION);
     prefs.putBytes("all", &cur, sizeof(cur));
+    prefs.putUChar("nfaces", (uint8_t)mc_clock_face_count());   // faces that existed at this save
 }
 
 void settings_init(void) {
@@ -48,6 +49,13 @@ void settings_init(void) {
         cur.volume = prefs.getUChar("vol", 100);          // step 7a stored only the volume
         prefs.remove("vol");
         save();
+    }
+    // Faces added by a firmware update start enabled.
+    int known = prefs.getUChar("nfaces", 3), count = mc_clock_face_count();
+    if (count > known) {
+        for (int i = known; i < count; i++) cur.faces |= 1 << i;
+        save();
+        Serial.printf("settings: %d new face(s) enabled\n", count - known);
     }
     prefs.getString("pin", pin, sizeof(pin));
     apply();

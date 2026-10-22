@@ -7,7 +7,8 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 
 ## Status
 
-- Faces: 3 in LVGL 9 (`firmware/src/mc_clock.c` / `.h`), running on the board since 2026-10-15.
+- Faces: 6 in LVGL 9 (`firmware/src/mc_clock.c` / `.h`); Cave, Torch, Nether added 2026-10-22.
+  The browser preview has only the first 3.
 - Browser preview of the same faces: `mc_clock_preview.html` (open locally, no server needed).
 - Step 7 done 2026-10-22: phone page (alarms, skip next, PIN, volume, ramp, snooze, problems,
   faces, brightness, night window).
@@ -113,6 +114,13 @@ board code; do not write new drivers.
    by phase (night / twilight / day), stars at night, 3 drifting clouds (lv_anim), grass+dirt ground.
 2. **Lamp** — orange "lamp" digits on a dark wall, red signal pulse travelling along a wire at the bottom.
 3. **Buddy** — mottled green block face with cheeks and smile, blinks about every 4 s, time below.
+4. **Cave** (2026-10-22) — stone wall, diamond-ore digits with one cell sparkling, an ore block that
+   cracks over each minute and breaks at :00 into the next ore (iron, gold, redstone, emerald,
+   diamond, lapis; no coal, its specks look like cracks). About 300 objects: 112 KB internal RAM
+   free while shown, the most of any face.
+5. **Torch** (2026-10-22) — nearly black, flickering 4x4 flame with a faint glow, dim warm digits.
+6. **Nether** (2026-10-22) — dark red rock, glowing orange digits, a lava pool along the bottom with
+   slow color waves and the odd bubble. The lava is a large bright area; shuffling limits its time.
 
 ### mc_clock.c review (2026-10-15)
 
@@ -198,7 +206,8 @@ Requirements:
 
 ## Later
 
-- More faces (space, robot, arcade scoreboard, lava lamp for night).
+- More faces: the user wants Minecraft-themed ones (original art only). Inventory & XP bar was
+  offered and not picked (2026-10-22).
 - Hebrew day/date names: needs a custom LVGL font and RTL handling. Do numerals and icons first.
   `lv_font_conv` output needs patching for LVGL 9 (see Clawdmeter `docs/fonts.md`).
 

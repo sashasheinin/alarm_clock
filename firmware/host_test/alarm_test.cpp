@@ -20,7 +20,7 @@ static int fails;
 static time_t at(int y, int mo, int d, int h, int mi) { struct tm t = {}; t.tm_year = y - 1900; t.tm_mon = mo - 1; t.tm_mday = d; t.tm_hour = h; t.tm_min = mi; t.tm_isdst = -1; return mktime(&t); }
 // advance the fake clock minute by minute up to `to`, ticking each second-ish
 static void run_to(time_t to) { while (T < to) { T += 20; MS += 20000; alarm_tick(); } }
-static void reboot() { alarm_dismiss(); playing = false; MS += 5000; alarm_init(); }
+static void reboot() { playing = false; MS += 5000; alarm_init(); }
 int main() {
     setenv("TZ", "IST-2IDT,M3.4.4/26,M10.5.0", 1); tzset();
     // 2026-10-25 is a Sunday.
@@ -71,6 +71,31 @@ int main() {
     puts("-- 14. next alarm across the DST change (2026-10-25 02:00 back to standard)");
     g_nvs.clear(); T = at(2026, 10, 24, 22, 0); alarm_init(); int32_t w; CHECK(alarm_next(&w, NULL));
     { time_t ts = (time_t)w * 60; struct tm t; localtime_r(&ts, &t); CHECK(t.tm_hour == 6 && t.tm_min == 45 && t.tm_mday == 25); }
+    puts("-- 15. snooze: 5 min, at most 2, then only dismiss ends it");
+    g_nvs.clear(); T = at(2026, 11, 9, 6, 0); alarm_init(); rings = 0;
+    run_to(at(2026, 11, 9, 6, 46)); CHECK(alarm_is_ringing());
+    CHECK(alarm_snooze()); CHECK(!alarm_is_ringing() && alarm_is_active() && !playing);
+    run_to(at(2026, 11, 9, 6, 50)); CHECK(!alarm_is_ringing());
+    run_to(at(2026, 11, 9, 6, 52)); CHECK(alarm_is_ringing() && rings == 2);
+    CHECK(alarm_snooze()); run_to(at(2026, 11, 9, 6, 58)); CHECK(alarm_is_ringing() && rings == 3);
+    CHECK(alarm_snoozes_left() == 0); CHECK(!alarm_snooze()); CHECK(alarm_is_ringing());
+    alarm_dismiss(); CHECK(!alarm_is_active()); run_to(at(2026, 11, 9, 7, 40)); CHECK(rings == 3);
+    puts("-- 16. reboot during a snooze still rings again");
+    T = at(2026, 11, 10, 6, 44); rings = 0; run_to(at(2026, 11, 10, 6, 46)); CHECK(alarm_snooze());
+    CHECK(alarm_snoozes_left() == 1);   /* a new alarm starts with both snoozes */
+    T = at(2026, 11, 10, 6, 48); reboot(); CHECK(alarm_is_active() && !alarm_is_ringing());
+    run_to(at(2026, 11, 10, 6, 52)); CHECK(alarm_is_ringing() && alarm_snoozes_left() == 1);
+    alarm_dismiss();
+    puts("-- 17. dismiss during a snooze cancels it");
+    T = at(2026, 11, 11, 6, 44); rings = 0; run_to(at(2026, 11, 11, 6, 46)); CHECK(alarm_snooze());
+    alarm_dismiss(); CHECK(!alarm_is_active()); run_to(at(2026, 11, 11, 7, 30)); CHECK(rings == 1);
+    puts("-- 18. board off across the snooze end, on 40 min later: dropped");
+    T = at(2026, 11, 12, 6, 44); rings = 0; run_to(at(2026, 11, 12, 6, 46)); CHECK(alarm_snooze());
+    T = at(2026, 11, 12, 7, 30); reboot(); run_to(at(2026, 11, 12, 7, 32)); CHECK(!alarm_is_active() && rings == 1);
+    puts("-- 19. timeout ends a snoozed-then-ringing alarm completely");
+    T = at(2026, 11, 13, 6, 44); rings = 0; run_to(at(2026, 11, 13, 6, 46)); CHECK(alarm_snooze());
+    run_to(at(2026, 11, 13, 6, 52)); CHECK(alarm_is_ringing()); run_to(at(2026, 11, 13, 7, 8));
+    CHECK(!alarm_is_active() && rings == 2);
     printf("\n%s (%d failures)\n", fails ? "FAILED" : "ALL PASSED", fails);
     return fails != 0;
 }

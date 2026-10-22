@@ -28,9 +28,15 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   N x M problem (2-9) covers the face; one correct answer stops the alarm. BOOT no longer stops
   it; serial `stop` still does. Touch was rotated 90 degrees (never noticed: faces only use "tap
   anywhere"); fixed in `board/touch.cpp`, check with serial `touchlog`.
-  Next: step 6 part 2, IMU snooze.
+- Step 6 done (2026-10-22, `gesture.cpp`, `board/imu.cpp`): turn face down (0.7 s, near flat)
+  or shake to snooze 5 min, at most 2 per alarm; snooze end saved in NVS (survives a reboot).
+  The math screen stays up during a snooze. Thresholds come from 20 Hz recordings (pickups and
+  tilting toward the face must not snooze); numbers in `gesture.cpp`. QMI8658 low-pass filter
+  must stay LPF_MODE_3: MODE_0 smoothed shakes away. Test build with a 1 min snooze:
+  `PLATFORMIO_BUILD_FLAGS=-DALARM_SNOOZE_MIN=1`. Serial `imulog`/`gesturelog` show the data.
+  Next: step 7, settings web page (DESIGN.md "Phone control").
 - **Alarm is currently OFF on the board** (2026-10-22): one alarm `0: 06:45 Sun-Fri "School"`,
-  switched off until the user decides to turn it on (math dismiss works; snooze not built). Restore with serial `alarm on 0`.
+  switched off until the user decides to turn it on (dismiss and snooze both work). Restore with serial `alarm on 0`.
 - Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards
   (`time $(TZ=Asia/Jerusalem date +%H:%M:%S)`), or wait for the hourly NTP sync.
 - Offline test build: `PLATFORMIO_BUILD_FLAGS=-DCLOCK_NO_WIFI platformio run -e clock -t upload`.
@@ -61,7 +67,7 @@ PlatformIO download them again.
 
 Board code is in `firmware/src/board/` (`board.h` = pins + API). In `main.cpp`: PWR short press =
 next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`, `wake`, `alarm` (list), `alarm add HH:MM DAYS [label]`, `alarm set N ...`,
-`alarm on|off|del N`, `alarm skip [off]`, `alarm test`, `stop` (DAYS = digits 0-6, 0 = Sunday), `touchlog`,
+`alarm on|off|del N`, `alarm skip [off]`, `alarm test`, `stop` (DAYS = digits 0-6, 0 = Sunday), `touchlog`, `snooze`, `imulog`, `gesturelog`,
 `beep`, `vol N`, `bright N`. The step-1 hardware test screen is in commit 01ad675.
 
 ## Rules

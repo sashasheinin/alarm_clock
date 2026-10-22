@@ -18,6 +18,8 @@ typedef struct {
 static store_t  store;
 static int32_t  handled_min = 0;       // minute stamp of the last handled alarm (rung or skipped)
 static int32_t  skip_min    = 0;       // alarms due at or before this minute are skipped; 0 = none
+static int32_t  snooze_end  = 0;       // epoch seconds when a snoozed alarm rings again; 0 = none
+static uint8_t  snoozes     = 0;       // snoozes used by the current alarm
 static bool     ringing     = false;
 static uint32_t ring_start  = 0;
 static uint32_t last_check  = 0;
@@ -30,6 +32,11 @@ static void save_list(void) { prefs.putBytes("list", &store, sizeof(store)); }
 static void save_handled(void) { prefs.putInt("handled_m", handled_min); }
 
 static void save_skip(void) { prefs.putInt("skip_m", skip_min); }
+
+static void save_snooze(void) {
+    prefs.putInt("snz_end", snooze_end);
+    prefs.putUChar("snz_n", snoozes);
+}
 
 static int32_t now_min(void) { return (int32_t)(time(NULL) / 60); }
 
@@ -86,6 +93,9 @@ void alarm_init(void) {
     memset(&store, 0, sizeof(store));
     handled_min = 0;
     skip_min = 0;
+    snooze_end = 0;
+    snoozes = 0;
+    ringing = false;
     if (prefs.getBytesLength("list") == sizeof(store)) {
         prefs.getBytes("list", &store, sizeof(store));
         if (store.version != STORE_VERSION || store.count > ALARM_MAX) {
@@ -94,6 +104,8 @@ void alarm_init(void) {
         }
         handled_min = prefs.getInt("handled_m", 0);
         skip_min = prefs.getInt("skip_m", 0);
+        snooze_end = prefs.getInt("snz_end", 0);
+        snoozes = prefs.getUChar("snz_n", 0);
     } else if (prefs.isKey("sched")) {
         migrate_old_schedule();
     } else {
@@ -109,11 +121,17 @@ void alarm_init(void) {
     save_list();
     save_handled();
     save_skip();
+    save_snooze();
+    if (snooze_end) Serial.printf("alarm: snoozed before reboot, %d snooze(s) used\n", snoozes);
     alarm_print();
 }
 
-static void start_ringing(const char* why) {
+// A new alarm starts with all snoozes available; a snooze ending keeps the count.
+static void start_ringing(const char* why, bool after_snooze = false) {
     if (ringing) return;
+    if (!after_snooze) snoozes = 0;
+    snooze_end = 0;
+    save_snooze();
     ringing = true;
     ring_start = millis();
     if (!sound_alarm_start()) Serial.println("alarm: sound busy, retrying");
@@ -128,21 +146,41 @@ static void stop_ringing(const char* why) {
     Serial.printf("alarm: stopped (%s) after %lu s\n", why, (millis() - ring_start) / 1000);
 }
 
+// Ends the alarm, ringing or snoozed.
+static void alarm_dismiss_reason(const char* why) {
+    if (snooze_end && !ringing) Serial.printf("alarm: snooze cancelled (%s)\n", why);
+    stop_ringing(why);
+    snooze_end = 0;
+    snoozes = 0;
+    save_snooze();
+}
+
 void alarm_tick(void) {
     uint32_t now_ms = millis();
 
     if (ringing) {
         screen_wake();                              // keep the screen on while ringing
         if (!sound_is_playing()) sound_alarm_start();   // e.g. a beep was playing when it fired
-        if (now_ms - ring_start >= ALARM_MAX_RING_MS) stop_ringing("timeout");
+        if (now_ms - ring_start >= ALARM_MAX_RING_MS) alarm_dismiss_reason("timeout");
         return;
     }
+    if (snooze_end) screen_wake();                  // keep the math problem visible
 
     if (now_ms - last_check < 1000) return;
     last_check = now_ms;
     if (!time_is_valid()) return;                   // never fire on an unknown time
 
     time_t now = time(NULL);
+    if (snooze_end && now >= snooze_end) {
+        if (now < snooze_end + ALARM_LATE_MIN * 60) {
+            start_ringing("snooze over", true);
+            return;
+        }
+        Serial.println("alarm: snooze ended too long ago, dropped");
+        snooze_end = 0;
+        snoozes = 0;
+        save_snooze();
+    }
     struct tm t;
     localtime_r(&now, &t);
     int mins = t.tm_hour * 60 + t.tm_min;
@@ -180,8 +218,22 @@ void alarm_tick(void) {
 }
 
 bool alarm_is_ringing(void) { return ringing; }
-void alarm_dismiss(void)    { stop_ringing("dismissed"); }
+bool alarm_is_active(void)  { return ringing || snooze_end != 0; }
+void alarm_dismiss(void)    { alarm_dismiss_reason("dismissed"); }
 void alarm_test(void)       { start_ringing("test"); }
+
+bool alarm_snooze(void) {
+    if (!ringing || snoozes >= ALARM_MAX_SNOOZES) return false;
+    stop_ringing("snoozed");
+    snoozes++;
+    snooze_end = (int32_t)time(NULL) + ALARM_SNOOZE_MIN * 60;
+    save_snooze();
+    Serial.printf("alarm: snoozed %d min (%d left)\n", ALARM_SNOOZE_MIN, ALARM_MAX_SNOOZES - snoozes);
+    return true;
+}
+
+int    alarm_snoozes_left(void) { return ALARM_MAX_SNOOZES - snoozes; }
+time_t alarm_snooze_until(void) { return snooze_end; }
 
 // After any change to the list, alarms already past their minute must not fire late
 // (e.g. adding 06:50 at 07:00). An alarm set for the current minute still rings.
@@ -276,7 +328,10 @@ bool alarm_skip_is_set(void) {
 }
 
 void alarm_print(void) {
-    Serial.printf("alarm: %d of %d%s\n", store.count, ALARM_MAX, ringing ? "  [RINGING]" : "");
+    Serial.printf("alarm: %d of %d%s", store.count, ALARM_MAX, ringing ? "  [RINGING]" : "");
+    if (snooze_end) Serial.printf("  [SNOOZED %ld s, %d left]", (long)(snooze_end - time(NULL)),
+                                  alarm_snoozes_left());
+    Serial.println("");
     for (int i = 0; i < store.count; i++) {
         const alarm_t* a = &store.list[i];
         char days[8];

@@ -12,6 +12,8 @@ struct Preferences {
     size_t getBytes(const char* k, void* v, size_t n) { memcpy(v, g_nvs[k].data(), n); return n; }
     size_t putInt(const char* k, int32_t v) { return putBytes(k, &v, 4); }
     int32_t getInt(const char* k, int32_t d) { if (!g_nvs.count(k)) return d; int32_t v; memcpy(&v, g_nvs[k].data(), 4); return v; }
+    size_t putUChar(const char* k, uint8_t v) { return putBytes(k, &v, 1); }
+    uint8_t getUChar(const char* k, uint8_t d) { if (!g_nvs.count(k)) return d; return g_nvs[k][0]; }
     bool isKey(const char* k) { return g_nvs.count(k) > 0; }
     bool remove(const char* k) { return g_nvs.erase(k) > 0; }
 };

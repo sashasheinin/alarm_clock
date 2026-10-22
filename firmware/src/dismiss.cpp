@@ -13,6 +13,7 @@ static lv_obj_t* hint     = NULL;
 static int       a, b;
 static char      entry[MAX_DIGITS + 1];
 static uint32_t  wrong_at = 0;
+static int       hint_state = -1;      // what the hint shows: 0 ringing, else snooze minute; -1 redraw
 
 static const char* const KEYS[] = {"1", "2", "3", "\n",
                                    "4", "5", "6", "\n",
@@ -20,6 +21,25 @@ static const char* const KEYS[] = {"1", "2", "3", "\n",
                                    LV_SYMBOL_BACKSPACE, "0", LV_SYMBOL_OK, ""};
 
 static int pick(void) { return DISMISS_MIN + esp_random() % (DISMISS_MAX - DISMISS_MIN + 1); }
+
+// Gray status line: how to snooze, or until when it is snoozed. Red "Try again" wins for a moment.
+static void refresh_hint(void) {
+    if (wrong_at) return;
+    time_t until = alarm_snooze_until();
+    int state = until ? (int)(until / 60) : 0;
+    if (state == hint_state) return;
+    hint_state = state;
+    if (until) {
+        struct tm t;
+        localtime_r(&until, &t);
+        lv_label_set_text_fmt(hint, "Snoozed until %02d:%02d. Solve it to stop", t.tm_hour, t.tm_min);
+    } else if (alarm_snoozes_left() > 0) {
+        lv_label_set_text_fmt(hint, "Solve it, or flip/shake to snooze (%d)", alarm_snoozes_left());
+    } else {
+        lv_label_set_text(hint, "No snoozes left. Solve it to stop");
+    }
+    lv_obj_set_style_text_color(hint, lv_color_hex(0xB0B8C0), 0);
+}
 
 static void show_question(void) {
     lv_label_set_text_fmt(question, "%d x %d = %s", a, b, entry[0] ? entry : "?");
@@ -90,25 +110,25 @@ static void create(void) {
     lv_obj_set_style_shadow_width(m, 0, LV_PART_ITEMS);
     lv_obj_add_event_cb(m, key_cb, LV_EVENT_VALUE_CHANGED, NULL);
 
-    lv_label_set_text(hint, "Solve it to stop the alarm");
-    lv_obj_set_style_text_color(hint, lv_color_hex(0xB0B8C0), 0);
+    hint_state = -1;
+    refresh_hint();
     show_question();
     Serial.printf("dismiss: showing %d x %d\n", a, b);
 }
 
 void dismiss_tick(void) {
-    bool ringing = alarm_is_ringing();
-    if (ringing && !overlay) create();
-    if (!ringing && overlay) {
+    bool active = alarm_is_active();
+    if (active && !overlay) create();
+    if (!active && overlay) {
         lv_obj_delete(overlay);
         overlay = question = hint = NULL;
         return;
     }
     if (overlay && wrong_at && millis() - wrong_at >= WRONG_MS) {
         wrong_at = 0;
-        lv_label_set_text(hint, "Solve it to stop the alarm");
-        lv_obj_set_style_text_color(hint, lv_color_hex(0xB0B8C0), 0);
+        hint_state = -1;
     }
+    if (overlay) refresh_hint();
 }
 
 lv_obj_t* dismiss_overlay(void) { return overlay; }

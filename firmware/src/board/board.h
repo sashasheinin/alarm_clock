@@ -77,6 +77,10 @@ void buttons_init(void);
 bool button_boot_held(void);
 bool button_extra_held(void);
 
+// ---- imu.cpp ---- (QMI8658 accelerometer; I2C, so call from the loop thread only)
+bool imu_init(void);
+bool imu_read(float* ax, float* ay, float* az);   // in g
+
 // ---- sound.cpp ----
 bool sound_init(void);
 void sound_set_volume(uint8_t vol);   // 0..100, codec digital volume

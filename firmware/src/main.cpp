@@ -3,13 +3,13 @@
 // Buttons:   PWR short press = next day brightness step; at night it wakes the screen.
 //            PWR never stops the alarm (holding it powers the board off).
 //            A ringing alarm stops only by solving the math problem (dismiss.cpp),
-//            serial "stop", or the 15 min timeout.
+//            serial "stop", or the 15 min timeout. Flip/shake snoozes (gesture.cpp).
 // Serial:    "screenshot" (used by tools/screenshot.sh), "time HH:MM[:SS]",
 //            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "status", "wake", "beep",
 //            "alarm" (list), "alarm add HH:MM DAYS [label]", "alarm set N HH:MM DAYS [label]",
 //            "alarm on N", "alarm off N", "alarm del N", "alarm skip [off]", "alarm test", "stop",
 //            (DAYS = digits 0-6, 0 = Sunday, e.g. 012345 = Sun-Fri)
-//            "vol <0-100>", "bright <0-255>", "touchlog" (toggle).
+//            "vol <0-100>", "bright <0-255>", "snooze", "touchlog", "imulog", "gesturelog" (toggles).
 #include <Arduino.h>
 #include <Wire.h>
 #include <lvgl.h>
@@ -21,6 +21,7 @@
 #include "screen.h"
 #include "alarm.h"
 #include "dismiss.h"
+#include "gesture.h"
 
 #define BUF_LINES 40   // LVGL partial render strips: 480 x 40 RGB565, two buffers in PSRAM
 
@@ -43,6 +44,8 @@ static void rounder_cb(lv_event_t* e) {
     display_round_area(&a->x1, &a->y1, &a->x2, &a->y2);
 }
 
+static bool gesture_log = false; // serial "gesturelog": print shake score while the alarm is on
+static bool imu_log = false;     // serial "imulog": print acceleration 20x per second
 static bool touch_log = false;   // serial "touchlog": print each press position
 
 static void touch_cb(lv_indev_t* indev, lv_indev_data_t* data) {
@@ -203,6 +206,15 @@ static void handle_command(const char* cmd) {
         alarm_test();
     } else if (strncmp(cmd, "alarm ", 6) == 0) {
         alarm_command(cmd + 6);
+    } else if (strcmp(cmd, "snooze") == 0) {
+        if (!alarm_snooze()) Serial.println("snooze: not ringing or no snoozes left");
+    } else if (strcmp(cmd, "gesturelog") == 0) {
+        gesture_log = !gesture_log;
+        gesture_set_log(gesture_log);
+        Serial.printf("gesturelog %s\n", gesture_log ? "on" : "off");
+    } else if (strcmp(cmd, "imulog") == 0) {
+        imu_log = !imu_log;
+        Serial.printf("imulog %s\n", imu_log ? "on" : "off");
     } else if (strcmp(cmd, "touchlog") == 0) {
         touch_log = !touch_log;
         Serial.printf("touchlog %s\n", touch_log ? "on" : "off");
@@ -260,6 +272,7 @@ void setup() {
     power_init();
     timekeeping_init();
     sound_init();
+    imu_init();
     touch_init();
     buttons_init();
 
@@ -276,7 +289,15 @@ void loop() {
     power_tick();
     timekeeping_tick();
     alarm_tick();
+    gesture_tick();
     dismiss_tick();
+
+    static uint32_t imu_log_ms = 0;
+    float ax, ay, az;
+    if (imu_log && millis() - imu_log_ms >= 50 && imu_read(&ax, &ay, &az)) {
+        imu_log_ms = millis();
+        Serial.printf("imu %.2f %.2f %.2f\n", ax, ay, az);
+    }
     screen_tick();
     check_serial();
 

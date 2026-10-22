@@ -46,6 +46,7 @@ Copy its code, never its fonts or art (no license, Anthropic assets).
 /opt/homebrew/bin/platformio run -d firmware -e clock -t upload            # flash (USB-C)
 /opt/homebrew/bin/platformio device monitor -d firmware                    # serial log
 tools/screenshot.sh out.png                                                # PNG of the screen
+firmware/host_test/run.sh                                                  # alarm logic test on the Mac
 ```
 
 Use `platformio`, not `pio`: `/opt/homebrew/bin/pio` is a broken link. If the build fails with
@@ -60,6 +61,7 @@ next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes th
 
 ## Rules
 
+- Run `firmware/host_test/run.sh` after any change to `alarm.cpp`; add a case for new alarm behavior.
 - **Alarm reliability comes first.** The alarm fires from the local clock only, never depends on
   Wi-Fi, and must survive power loss (settings in NVS). Test the offline path before features.
 - **PWR key must never dismiss or snooze the alarm**: holding it powers the board off.

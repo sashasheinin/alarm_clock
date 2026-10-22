@@ -9,7 +9,7 @@
 //            "alarm" (list), "alarm add HH:MM DAYS [label]", "alarm set N HH:MM DAYS [label]",
 //            "alarm on N", "alarm off N", "alarm del N", "alarm skip [off]", "alarm test", "stop",
 //            (DAYS = digits 0-6, 0 = Sunday, e.g. 012345 = Sun-Fri)
-//            "vol <0-100>", "bright <0-255>", "snooze", "touchlog", "imulog", "gesturelog" (toggles).
+//            "vol <0-100>" (until reboot; the phone page saves it), "pin <4-8 digits>|off", "bright <0-255>", "snooze", "touchlog", "imulog", "gesturelog" (toggles).
 #include <Arduino.h>
 #include <Wire.h>
 #include <lvgl.h>
@@ -22,6 +22,8 @@
 #include "alarm.h"
 #include "dismiss.h"
 #include "gesture.h"
+#include "settings.h"
+#include "web.h"
 
 #define BUF_LINES 40   // LVGL partial render strips: 480 x 40 RGB565, two buffers in PSRAM
 
@@ -197,6 +199,7 @@ static void handle_command(const char* cmd) {
     } else if (strcmp(cmd, "status") == 0) {
         timekeeping_print_status();
         alarm_print();
+        web_print_status();
         screen_print_status();
         Serial.printf("power: battery %d%%%s, usb %s\n", power_battery_pct(),
                       power_is_charging() ? " charging" : "", power_is_vbus_in() ? "yes" : "no");
@@ -206,6 +209,10 @@ static void handle_command(const char* cmd) {
         alarm_test();
     } else if (strncmp(cmd, "alarm ", 6) == 0) {
         alarm_command(cmd + 6);
+    } else if (strncmp(cmd, "pin ", 4) == 0) {
+        const char* p = strcmp(cmd + 4, "off") == 0 ? "" : cmd + 4;
+        if (settings_set_pin(p)) Serial.printf("pin %s\n", p[0] ? "set" : "cleared");
+        else Serial.println("usage: pin <4-8 digits> | pin off");
     } else if (strcmp(cmd, "snooze") == 0) {
         if (!alarm_snooze()) Serial.println("snooze: not ringing or no snoozes left");
     } else if (strcmp(cmd, "gesturelog") == 0) {
@@ -272,6 +279,7 @@ void setup() {
     power_init();
     timekeeping_init();
     sound_init();
+    settings_init();
     imu_init();
     touch_init();
     buttons_init();
@@ -290,6 +298,7 @@ void loop() {
     timekeeping_tick();
     alarm_tick();
     gesture_tick();
+    web_tick();
     dismiss_tick();
 
     static uint32_t imu_log_ms = 0;

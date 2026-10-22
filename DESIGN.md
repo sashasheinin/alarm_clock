@@ -12,7 +12,7 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 - Steps 1-5 done 2026-10-15. Step 5: alarm core with a generated tone (no TF card yet). Step 4: night 22:00-06:00 panel fully off, tap/PWR wakes it dim
   for 15 s, pixel shift. Step 3: RTC + Wi-Fi/SNTP time verified, including a power cut
   with Wi-Fi off. Step 1: display, touch, buttons, PMU and speaker confirmed on the board.
-- Not started: math dismiss + IMU snooze, WAV sounds from TF card, bedtime face, settings page, burn-in protection.
+- Not started: math dismiss + IMU snooze, WAV sounds from TF card, bedtime face, settings page.
 - Stack changed 2026-10-15 from ESP-IDF + Waveshare demo to PlatformIO + Arduino, reusing
   Clawdmeter's board code (see "Reference project").
 
@@ -170,10 +170,28 @@ Requirements:
   silence the alarm would turn the clock off. Use BOOT (GPIO 0) or GPIO 18 if a button is needed.
 - Bedtime mode: minimal dark face + low brightness.
 
+## Phone control (decided 2026-10-22)
+
+- Settings web page served by the board on home Wi-Fi, opened in the phone browser (Android) and
+  saved to the home screen. No app, no cloud, home network only. BLE rejected (needs an app or
+  Web Bluetooth); cloud relay rejected (not needed away from home).
+- Address: `http://clock.local` (mDNS). Some Android versions don't resolve `.local`, so also
+  reserve a fixed IP for the clock in the router and show the IP in serial `status`.
+- The page only edits settings in NVS. The alarm keeps firing from the local clock with Wi-Fi
+  or the router down.
+- Anyone on home Wi-Fi can view the page; saving changes needs a parent PIN (set over serial,
+  stored in NVS). The PIN keeps the child from turning the alarm off. Sent in plain HTTP on the
+  home LAN, so it isn't real security.
+- Alarm model: a list of up to 8 alarms, each = on/off, HH:MM, weekday mask, optional label.
+  Replaces `int16_t schedule[7]`; on first boot the old `sched` key converts to one alarm
+  per distinct time. Change this before step 6, which builds snooze/dismiss on top of it.
+- "Skip next": one switch that silences only the next alarm due to ring, then clears itself.
+  Stored in NVS so it survives a reboot.
+- Other settings on the page: max volume, ramp length, snooze length, math difficulty and number
+  of problems, enabled faces, brightness, night-off hours.
+
 ## Later
 
-- Settings web page served by the board on home Wi-Fi: alarms, enabled faces, volume, brightness.
-  No reflashing to change settings.
 - More faces (space, robot, arcade scoreboard, lava lamp for night).
 - Hebrew day/date names: needs a custom LVGL font and RTL handling. Do numerals and icons first.
   `lv_font_conv` output needs patching for LVGL 9 (see Clawdmeter `docs/fonts.md`).
@@ -212,8 +230,9 @@ Requirements:
 3. Wi-Fi + SNTP + TZ + RTC sync (PCF85063, OS-flag check).
 4. Burn-in protection (pixel shift, night dim, screen-off window).
 5. Alarm core (clock trigger, NVS storage, sound from TF card, volume ramp).
+5b. Alarm list model (up to 8 alarms, weekday masks, skip-next), converting the old schedule.
 6. Dismiss/snooze (math problem UI, IMU shake/flip).
-7. Settings web page.
+7. Settings web page (see "Phone control"), mDNS + PIN.
 8. More faces.
 
 ## Files

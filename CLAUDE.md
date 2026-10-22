@@ -21,9 +21,11 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   off), fires only on valid time, up to 30 min late, no double ring after reboot, generated
   beep pattern ramping 15% -> 100% over 60 s, auto-stop after 15 min. BOOT or serial `stop`
   dismisses for now. Not yet tested on the board: the late-fire path and the 15 min timeout.
-  Next: step 5b (alarm list model, DESIGN.md "Phone control"), then step 6 (math dismiss, IMU snooze).
-- **Alarm is currently OFF on the board** (all days off in NVS, 2026-10-15) until step 6 works.
-  Restore with serial `alarm 0 06:45` ... `alarm 5 06:45`; Saturday (6) stays off.
+- Step 5b done (2026-10-22): alarm list (up to 8: time, weekday mask, on/off, label) + "skip
+  next", replacing the per-weekday schedule (old NVS key converted on first boot). Phone control
+  decided (DESIGN.md "Phone control"). Next: step 6 (math dismiss, IMU snooze).
+- **Alarm is currently OFF on the board** (2026-10-22): one alarm `0: 06:45 Sun-Fri "School"`,
+  switched off until step 6 works. Restore with serial `alarm on 0`.
 - Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards
   (`time $(TZ=Asia/Jerusalem date +%H:%M:%S)`), or wait for the hourly NTP sync.
 - Offline test build: `PLATFORMIO_BUILD_FLAGS=-DCLOCK_NO_WIFI platformio run -e clock -t upload`.
@@ -52,7 +54,8 @@ missing `scons.py`, `idf_tools.py` or `xtensa-esp32s3-elf-g++`, the toolchain ca
 PlatformIO download them again.
 
 Board code is in `firmware/src/board/` (`board.h` = pins + API). In `main.cpp`: PWR short press =
-next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`, `wake`, `alarm`, `alarm <day> HH:MM|off`, `alarm test`, `stop`,
+next brightness; serial commands `screenshot`, `time HH:MM[:SS]` (also writes the RTC), `face N`, `next`, `heap`, `i2cscan`, `status`, `wake`, `alarm` (list), `alarm add HH:MM DAYS [label]`, `alarm set N ...`,
+`alarm on|off|del N`, `alarm skip [off]`, `alarm test`, `stop` (DAYS = digits 0-6, 0 = Sunday),
 `beep`, `vol N`, `bright N`. The step-1 hardware test screen is in commit 01ad675.
 
 ## Rules

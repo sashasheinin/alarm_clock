@@ -9,6 +9,7 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 
 - Faces: 3 in LVGL 9 (`firmware/src/mc_clock.c` / `.h`), running on the board since 2026-10-15.
 - Browser preview of the same faces: `mc_clock_preview.html` (open locally, no server needed).
+- Step 5b done 2026-10-22: alarm list (up to 8) + skip next, see "Phone control".
 - Steps 1-5 done 2026-10-15. Step 5: alarm core with a generated tone (no TF card yet). Step 4: night 22:00-06:00 panel fully off, tap/PWR wakes it dim
   for 15 s, pixel shift. Step 3: RTC + Wi-Fi/SNTP time verified, including a power cut
   with Wi-Fi off. Step 1: display, touch, buttons, PMU and speaker confirmed on the board.
@@ -158,7 +159,8 @@ I2C while playing), auto-stop after 15 min. Temporary dismiss: BOOT or serial `s
 
 Requirements:
 - Fires from the system clock, never from the network. Must work fully offline.
-- Alarms stored in flash (NVS, via `Preferences`), survive power loss. Weekday and weekend schedules.
+- Alarms stored in flash (NVS, via `Preferences`), survive power loss. Up to 8 alarms, each with
+  its own weekdays (step 5b).
 - Gradual volume ramp-up. Sounds loaded from the TF card (WAV, a few options).
 - Snooze: shake or flip (IMU).
 - Dismiss: solve a multiplication problem on the touchscreen (difficulty configurable). Wake-up

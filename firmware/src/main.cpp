@@ -5,7 +5,9 @@
 //            BOOT = stop a ringing alarm (temporary until the math dismiss, step 6).
 // Serial:    "screenshot" (used by tools/screenshot.sh), "time HH:MM[:SS]",
 //            "face N" (0 sky, 1 lamp, 2 buddy), "next", "heap", "i2cscan", "status", "wake", "beep",
-//            "alarm" (show), "alarm <day 0-6, 0=Sun> HH:MM|off", "alarm test", "stop",
+//            "alarm" (list), "alarm add HH:MM DAYS [label]", "alarm set N HH:MM DAYS [label]",
+//            "alarm on N", "alarm off N", "alarm del N", "alarm skip [off]", "alarm test", "stop",
+//            (DAYS = digits 0-6, 0 = Sunday, e.g. 012345 = Sun-Fri)
 //            "vol <0-100>", "bright <0-255>".
 #include <Arduino.h>
 #include <Wire.h>
@@ -121,6 +123,50 @@ static void set_time_cmd(const char* arg) {
     timekeeping_set_manual(h, m, sec);
 }
 
+// "HH:MM DAYS [label]" -> alarm (enabled). DAYS = digits 0-6, 0 = Sunday.
+static bool parse_alarm(const char* args, alarm_t* a) {
+    int h, m, n = 0;
+    char days[16];
+    if (sscanf(args, "%d:%d %15s %n", &h, &m, days, &n) < 3 || h < 0 || h > 23 || m < 0 || m > 59)
+        return false;
+    memset(a, 0, sizeof(*a));
+    for (const char* c = days; *c; c++) {
+        if (*c < '0' || *c > '6') return false;
+        a->days |= 1 << (*c - '0');
+    }
+    a->enabled = 1;
+    a->minutes = h * 60 + m;
+    if (n > 0) strlcpy(a->label, args + n, sizeof(a->label));
+    return true;
+}
+
+static void alarm_command(const char* args) {
+    alarm_t a;
+    int i, n = 0;
+    bool ok;
+    if (strncmp(args, "add ", 4) == 0) {
+        ok = parse_alarm(args + 4, &a) && alarm_add(&a) >= 0;
+    } else if (sscanf(args, "set %d %n", &i, &n) == 1 && n > 0) {
+        ok = parse_alarm(args + n, &a) && alarm_update(i, &a);
+    } else if (sscanf(args, "on %d", &i) == 1 || sscanf(args, "off %d", &i) == 1) {
+        ok = alarm_get(i, &a);
+        a.enabled = args[1] == 'n';
+        ok = ok && alarm_update(i, &a);
+    } else if (sscanf(args, "del %d", &i) == 1) {
+        ok = alarm_remove(i);
+    } else if (strcmp(args, "skip") == 0) {
+        ok = alarm_skip_next(true);
+    } else if (strcmp(args, "skip off") == 0) {
+        ok = alarm_skip_next(false);
+    } else {
+        Serial.println("usage: alarm add HH:MM DAYS [label] | set N HH:MM DAYS [label] | on N | off N"
+                       " | del N | skip [off] | test   (DAYS: 0-6, 0=Sun)");
+        return;
+    }
+    if (!ok) Serial.println("alarm: rejected (bad index, bad time/days, list full, or no next alarm)");
+    alarm_print();
+}
+
 static void handle_command(const char* cmd) {
     if (strcmp(cmd, "screenshot") == 0) {
         send_screenshot();
@@ -149,18 +195,7 @@ static void handle_command(const char* cmd) {
     } else if (strcmp(cmd, "alarm test") == 0) {
         alarm_test();
     } else if (strncmp(cmd, "alarm ", 6) == 0) {
-        int d, h, m;
-        char off[4];
-        if (sscanf(cmd + 6, "%d %d:%d", &d, &h, &m) == 3 && d >= 0 && d < 7 && h >= 0 && h < 24 &&
-            m >= 0 && m < 60) {
-            alarm_set(d, h * 60 + m);
-            alarm_print();
-        } else if (sscanf(cmd + 6, "%d %3s", &d, off) == 2 && strcmp(off, "off") == 0 && d >= 0 && d < 7) {
-            alarm_set(d, ALARM_OFF);
-            alarm_print();
-        } else {
-            Serial.println("usage: alarm <day 0-6, 0=Sun> HH:MM|off");
-        }
+        alarm_command(cmd + 6);
     } else if (strcmp(cmd, "stop") == 0) {
         alarm_dismiss();
     } else if (strcmp(cmd, "wake") == 0) {

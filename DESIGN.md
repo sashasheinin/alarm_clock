@@ -176,6 +176,8 @@ Requirements:
   its own weekdays (step 5b).
 - Gradual volume ramp-up. Sound: a WAV from the flash LittleFS partition (no TF card, decided
   2026-10-23), the generated beep when there is no usable file or it fails to read.
+  User verdict on 44.1 kHz ADPCM (2026-10-23): much better, "not fully clean but ok", volume ok.
+  If cleaner is wanted: uncompressed 44.1 kHz PCM fits only ~38 s in the 3.4 MB partition.
 - Snooze: shake or flip (IMU).
 - Dismiss: solve a multiplication problem on the touchscreen (difficulty configurable). Wake-up
   check and quiet practice at once.

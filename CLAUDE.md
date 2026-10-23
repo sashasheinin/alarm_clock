@@ -36,7 +36,7 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   1 min on the phone page (saved settings override `-DALARM_SNOOZE_MIN`). Serial
   `imulog`/`gesturelog` show the data.
 - Step 7a done (2026-10-22, `web.cpp`, `settings.cpp`): phone page at http://clock.local or
-  http://192.168.0.103 (the IP changed after a reflash on 2026-10-23; the user should reserve it in the router): alarm list, skip next, volume (saved in
+  http://192.168.0.103 (reserved in the router, 2026-10-23): alarm list, skip next, volume (saved in
   NVS; serial `vol` is temporary). Changes need the parent PIN, set over serial `pin NNNN`;
   5 wrong PINs lock changes for 1 min. API: GET /api/state, POST /api/alarm|delete|skip|volume|beep
   (form fields, `pin` in each). Checked with curl + Playwright (Pixel 7); not yet on the user's phone.

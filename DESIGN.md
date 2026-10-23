@@ -18,7 +18,8 @@ This doc is the handoff to a local Claude Code session. Read it fully before cha
 - Steps 1-5 done 2026-10-15. Step 5: alarm core with a generated tone (no TF card yet). Step 4: night 22:00-06:00 panel fully off, tap/PWR wakes it dim
   for 15 s, pixel shift. Step 3: RTC + Wi-Fi/SNTP time verified, including a power cut
   with Wi-Fi off. Step 1: display, touch, buttons, PMU and speaker confirmed on the board.
-- Not started: WAV sounds from TF card, bedtime face.
+- WAV alarm sound from flash done 2026-10-23.
+- Not started: bedtime face.
 - Stack changed 2026-10-15 from ESP-IDF + Waveshare demo to PlatformIO + Arduino, reusing
   Clawdmeter's board code (see "Reference project").
 
@@ -173,7 +174,8 @@ Requirements:
 - Fires from the system clock, never from the network. Must work fully offline.
 - Alarms stored in flash (NVS, via `Preferences`), survive power loss. Up to 8 alarms, each with
   its own weekdays (step 5b).
-- Gradual volume ramp-up. Sounds loaded from the TF card (WAV, a few options).
+- Gradual volume ramp-up. Sound: a WAV from the flash LittleFS partition (no TF card, decided
+  2026-10-23), the generated beep when there is no usable file or it fails to read.
 - Snooze: shake or flip (IMU).
 - Dismiss: solve a multiplication problem on the touchscreen (difficulty configurable). Wake-up
   check and quiet practice at once.

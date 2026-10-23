@@ -48,7 +48,13 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
 - Step 8 (2026-10-22): faces 4-6 added, Cave, Torch, Nether (DESIGN.md "Faces implemented"),
   each checked by screenshot. Faces added by a firmware update start enabled (`settings.cpp`
   stores the face count with the mask). Keep a face under ~300 objects: Cave leaves 112 KB free.
-  Next: WAV sounds from the TF card, or use Torch as the night-wake / bedtime face.
+- WAV alarm (2026-10-23, `board/sound.cpp`): the alarm plays the first `.wav` (by name) in
+  `/sounds` on the LittleFS "spiffs" partition (3.4 MB), looped, resampled to 44.1 kHz; beeps if
+  there is none or a read fails. No TF card. Sounds live in `firmware/data/sounds/` (git-ignored:
+  may be copyrighted) and go to the board with `platformio run -d firmware -e clock -t uploadfs`
+  (does not touch NVS; a firmware upload does not touch the sounds). Current sound: 84 s of a
+  song, 16 kHz mono 16-bit = 2.7 MB. Make new ones with `ffmpeg ... -ac 1 -ar 16000 -c:a pcm_s16le`.
+  Next: Torch as the night-wake / bedtime face, or more Minecraft faces.
 - **Alarm is currently OFF on the board** (2026-10-22): one alarm `0: 06:45 Sun-Fri "School"`,
   switched off until the user decides to turn it on (dismiss and snooze both work). Restore with serial `alarm on 0`.
 - Testing night mode with `time HH:MM` also writes the RTC; restore the real time afterwards

@@ -4,3 +4,6 @@
 *.zip
 *.bmp
 firmware/src/secrets.h
+
+# Alarm sounds: may be copyrighted, never commit
+firmware/data/sounds/

@@ -361,11 +361,14 @@ esp_err_t es8311_voice_volume_set(es8311_handle_t dev, int volume, int *volume_s
         volume = 100;
     }
 
+    // REG32: 0x00 = -95.5 dB, 0.5 dB per step, 0xBF = 0 dB, 0xFF = +32 dB.
+    // The original mapping (volume * 256 / 100 - 1) put 100 at +32 dB: music clipped badly
+    // (beeps hid it). Here 100 = 0 dB and each step down is 0.5 dB (1 = -49.5 dB).
     int reg32;
     if (volume == 0) {
         reg32 = 0;
     } else {
-        reg32 = ((volume) * 256 / 100) - 1;
+        reg32 = 0xBF - (100 - volume);
     }
 
     // provide user with real volume set

@@ -36,7 +36,7 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   1 min on the phone page (saved settings override `-DALARM_SNOOZE_MIN`). Serial
   `imulog`/`gesturelog` show the data.
 - Step 7a done (2026-10-22, `web.cpp`, `settings.cpp`): phone page at http://clock.local or
-  http://192.168.0.111 (reserve this IP in the router): alarm list, skip next, volume (saved in
+  http://192.168.0.103 (the IP changed after a reflash on 2026-10-23; the user should reserve it in the router): alarm list, skip next, volume (saved in
   NVS; serial `vol` is temporary). Changes need the parent PIN, set over serial `pin NNNN`;
   5 wrong PINs lock changes for 1 min. API: GET /api/state, POST /api/alarm|delete|skip|volume|beep
   (form fields, `pin` in each). Checked with curl + Playwright (Pixel 7); not yet on the user's phone.
@@ -52,8 +52,14 @@ settings, known issues in `mc_clock.c`, risks and build order. Update it when a 
   `/sounds` on the LittleFS "spiffs" partition (3.4 MB), looped, resampled to 44.1 kHz; beeps if
   there is none or a read fails. No TF card. Sounds live in `firmware/data/sounds/` (git-ignored:
   may be copyrighted) and go to the board with `platformio run -d firmware -e clock -t uploadfs`
-  (does not touch NVS; a firmware upload does not touch the sounds). Current sound: 84 s of a
-  song, 16 kHz mono 16-bit = 2.7 MB. Make new ones with `ffmpeg ... -ac 1 -ar 16000 -c:a pcm_s16le`.
+  (does not touch NVS; a firmware upload does not touch the sounds). Plays 16-bit PCM or mono
+  IMA ADPCM. Best: 44.1 kHz ADPCM (no resampling, 4 bits/sample; 84 s = 1.86 MB). Make one with
+  `ffmpeg -i in -t 84 -af "aformat=channel_layouts=mono,aresample=44100,highpass=f=200,`
+  `alimiter=limit=0.89:level=false" -c:a adpcm_ima_wav out.wav`. The decoder matches ffmpeg
+  bit for bit (checked 2026-10-23). 16 kHz PCM sounded "mechanical" (8 kHz band limit plus
+  linear resampling).
+- ES8311 volume (2026-10-23): our `es8311.c` maps volume 100 to 0 dB (reg 0xBF), 0.5 dB per step.
+  The original driver put 100 at +32 dB: music clipped and sounded harsh; beeps hid it.
   Next: Torch as the night-wake / bedtime face, or more Minecraft faces.
 - **Alarm is currently OFF on the board** (2026-10-22): one alarm `0: 06:45 Sun-Fri "School"`,
   switched off until the user decides to turn it on (dismiss and snooze both work). Restore with serial `alarm on 0`.

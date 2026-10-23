@@ -47,7 +47,8 @@ static void tone_task(void* arg) {
 }
 
 // Alarm sound: the first .wav (by name) in /sounds on the LittleFS partition, looped.
-// 16-bit PCM, mono or stereo, any sample rate (resampled to 44.1 kHz). If there is no
+// 16-bit PCM (mono or stereo) or IMA ADPCM (mono), any sample rate, resampled to 44.1 kHz.
+// ADPCM at 44.1 kHz needs no resampling and is a quarter of the size: best quality. If there is no
 // usable file, or reading it fails during the alarm, the generated "beep-beep ... pause"
 // pattern plays instead, so the alarm always makes a sound.
 // Loudness ramps from ALARM_START_LEVEL to full over ramp_ms by scaling the samples here,
@@ -56,13 +57,49 @@ static volatile uint32_t ramp_ms = 60000;   // read by the alarm task; 0 = full 
 #define ALARM_START_LEVEL  0.15f
 #define ALARM_FREQ_HZ      1000
 #define WAV_READ_FRAMES    256
+#define WAV_PCM            1
+#define WAV_IMA_ADPCM      0x11
+#define ADPCM_MAX_BLOCK    2048        // bytes; ffmpeg writes 1024
 
 // pattern in 10 ms chunks: on, off, on, off(long)
 static const uint8_t ALARM_PATTERN[] = {15, 8, 15, 40};
 
+static uint32_t rd32(const uint8_t* p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
+static uint16_t rd16(const uint8_t* p) { return p[0] | p[1] << 8; }
+
 static char     wav_path[64] = "";          // empty = no usable file: beep
 static uint32_t wav_off, wav_len, wav_rate;
-static uint16_t wav_channels;
+static uint16_t wav_channels, wav_format, wav_align;
+
+// IMA ADPCM tables (public standard)
+static const int8_t ADPCM_INDEX[16] = {-1, -1, -1, -1, 2, 4, 6, 8, -1, -1, -1, -1, 2, 4, 6, 8};
+static const int16_t ADPCM_STEP[89] = {
+    7, 8, 9, 10, 11, 12, 13, 14, 16, 17, 19, 21, 23, 25, 28, 31, 34, 37, 41, 45, 50, 55, 60, 66,
+    73, 80, 88, 97, 107, 118, 130, 143, 157, 173, 190, 209, 230, 253, 279, 307, 337, 371, 408,
+    449, 494, 544, 598, 658, 724, 796, 876, 963, 1060, 1166, 1282, 1411, 1552, 1707, 1878, 2066,
+    2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428, 4871, 5358, 5894, 6484, 7132, 7845, 8630,
+    9493, 10442, 11487, 12635, 13899, 15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767};
+
+// Decodes one mono IMA ADPCM WAV block (4-byte header, then two 4-bit codes per byte,
+// low nibble first). Returns the number of samples written to out.
+static size_t adpcm_block(const uint8_t* blk, size_t len, int16_t* out) {
+    if (len < 4) return 0;
+    int32_t pred = (int16_t)rd16(blk);
+    int idx = blk[2] > 88 ? 88 : blk[2];
+    size_t n = 0;
+    out[n++] = (int16_t)pred;
+    for (size_t i = 4; i < len; i++)
+        for (int half = 0; half < 2; half++) {
+            int code = half ? blk[i] >> 4 : blk[i] & 0x0F;
+            int32_t diff = ((2 * (code & 7) + 1) * ADPCM_STEP[idx]) >> 3;   // as ffmpeg encodes
+            pred += (code & 8) ? -diff : diff;
+            pred = pred > 32767 ? 32767 : pred < -32768 ? -32768 : pred;
+            idx += ADPCM_INDEX[code];
+            idx = idx < 0 ? 0 : idx > 88 ? 88 : idx;
+            out[n++] = (int16_t)pred;
+        }
+    return n;
+}
 
 void sound_set_ramp_ms(uint32_t ms) { ramp_ms = ms; }
 
@@ -71,10 +108,8 @@ static float ramp_level(uint32_t start) {
     return ALARM_START_LEVEL + (1.0f - ALARM_START_LEVEL) * (ramp > 1.0f ? 1.0f : ramp);
 }
 
-static uint32_t rd32(const uint8_t* p) { return p[0] | p[1] << 8 | p[2] << 16 | (uint32_t)p[3] << 24; }
-static uint16_t rd16(const uint8_t* p) { return p[0] | p[1] << 8; }
 
-// Finds the fmt and data chunks; true if the file is 16-bit PCM.
+// Finds the fmt and data chunks; true if the file is 16-bit PCM or mono IMA ADPCM.
 static bool wav_parse(File& f) {
     uint8_t h[16];
     if (f.read(h, 12) != 12 || memcmp(h, "RIFF", 4) || memcmp(h + 8, "WAVE", 4)) return false;
@@ -83,14 +118,18 @@ static bool wav_parse(File& f) {
         uint32_t size = rd32(h + 4);
         if (!memcmp(h, "fmt ", 4) && size >= 16) {
             if (f.read(h, 16) != 16) return false;
+            wav_format = rd16(h);
             wav_channels = rd16(h + 2);
             wav_rate = rd32(h + 4);
-            fmt_ok = rd16(h) == 1 && rd16(h + 14) == 16 && (wav_channels == 1 || wav_channels == 2) &&
-                     wav_rate >= 8000 && wav_rate <= 48000;
+            wav_align = rd16(h + 12);
+            bool pcm = wav_format == WAV_PCM && rd16(h + 14) == 16 && (wav_channels == 1 || wav_channels == 2);
+            bool ima = wav_format == WAV_IMA_ADPCM && rd16(h + 14) == 4 && wav_channels == 1 &&
+                       wav_align > 4 && wav_align <= ADPCM_MAX_BLOCK;
+            fmt_ok = (pcm || ima) && wav_rate >= 8000 && wav_rate <= 48000;
             size -= 16;
         } else if (!memcmp(h, "data", 4)) {
             wav_off = f.position();
-            wav_len = size - size % (2 * wav_channels);
+            wav_len = wav_format == WAV_PCM ? size - size % (2 * wav_channels) : size;
             return fmt_ok && wav_len > 0 && wav_off + wav_len <= f.size();
         }
         if (!f.seek(f.position() + size + (size & 1))) return false;
@@ -122,17 +161,21 @@ static void wav_find(void) {
     snprintf(path, sizeof(path), "/sounds/%s", best);
     File f = LittleFS.open(path, "r");
     if (!f || !wav_parse(f)) {
-        Serial.printf("sound: %s is not 16-bit PCM WAV, the alarm will beep\n", path);
+        Serial.printf("sound: %s is not 16-bit PCM or mono IMA ADPCM WAV, the alarm will beep\n", path);
         return;
     }
     strcpy(wav_path, path);
-    Serial.printf("sound: alarm sound %s, %lu Hz, %u ch, %lu s\n", wav_path, (unsigned long)wav_rate,
-                  wav_channels, (unsigned long)(wav_len / (2 * wav_channels) / wav_rate));
+    uint32_t frames = wav_format == WAV_PCM ? wav_len / (2 * wav_channels)
+                                            : wav_len / wav_align * ((wav_align - 4) * 2 + 1);
+    Serial.printf("sound: alarm sound %s, %s, %lu Hz, %u ch, %lu s\n", wav_path,
+                  wav_format == WAV_PCM ? "PCM" : "IMA ADPCM", (unsigned long)wav_rate, wav_channels,
+                  (unsigned long)(frames / wav_rate));
 }
 
 // Plays the WAV in a loop until stop is requested. False if it cannot be read (the caller beeps).
 static bool play_wav(uint32_t start, int16_t* buf) {
-    static int16_t in[WAV_READ_FRAMES * 2];
+    static int16_t in[(ADPCM_MAX_BLOCK - 4) * 2 + 1];   // decoded ADPCM block, or raw PCM
+    static uint8_t blk[ADPCM_MAX_BLOCK];
     File f = LittleFS.open(wav_path, "r");
     if (!f || !f.seek(wav_off)) return false;
     uint32_t left = wav_len;                    // bytes left before looping
@@ -146,10 +189,18 @@ static bool play_wav(uint32_t start, int16_t* buf) {
                 if (!f.seek(wav_off)) return false;
                 left = wav_len;
             }
-            size_t want = left < sizeof(in) ? left : sizeof(in);
-            if (f.read((uint8_t*)in, want) != want) return false;
-            left -= want;
-            in_n = want / (2 * wav_channels);
+            if (wav_format == WAV_PCM) {
+                size_t want = left < WAV_READ_FRAMES * 4 ? left : WAV_READ_FRAMES * 4;
+                if (f.read((uint8_t*)in, want) != want) return false;
+                left -= want;
+                in_n = want / (2 * wav_channels);
+            } else {
+                size_t want = left < wav_align ? left : wav_align;   // the last block may be short
+                if (f.read(blk, want) != want) return false;
+                left -= want;
+                in_n = adpcm_block(blk, want, in);
+                if (in_n == 0) return false;
+            }
             in_i = 0;
         }
         *out = wav_channels == 2 ? (int16_t)((in[2 * in_i] + in[2 * in_i + 1]) / 2) : in[in_i];
